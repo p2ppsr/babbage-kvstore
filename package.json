@@ -1,0 +1,40 @@
+{
+  "name": "babbage-kvstore",
+  "version": "1.0.0",
+  "description": "Set and get keys and Values©",
+  "main": "kvstore.js",
+  "scripts": {
+    "test": "jest",
+    "doc": "documentation readme --section=API kvstore.js",
+    "lint": "standard --fix ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/p2ppsr/babbage-kvstore.git"
+  },
+  "keywords": [
+    "key",
+    "value",
+    "bsv",
+    "babbage",
+    "metanet",
+    "storage",
+    "settings"
+  ],
+  "author": "peer-to-peer Privacy Systems Research, LLC",
+  "license": "Open BSV License",
+  "bugs": {
+    "url": "https://github.com/p2ppsr/babbage-kvstore/issues"
+  },
+  "homepage": "https://github.com/p2ppsr/babbage-kvstore#readme",
+  "dependencies": {
+    "@babbage/sdk": "^0.4.5",
+    "parapet-js": "^0.1.4",
+    "pushdrop": "^0.1.8"
+  },
+  "devDependencies": {
+    "documentation": "^14.0.0",
+    "jest": "^29.2.0",
+    "standard": "^17.0.0"
+  }
+}
