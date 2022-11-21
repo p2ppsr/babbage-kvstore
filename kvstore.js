@@ -2,6 +2,12 @@ const parapet = require('parapet-js')
 const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
 
+const defaultConfig = {
+  resolvers: undefined,
+  protocolID: [0, 'kvstore'],
+  tokenAmount: 1000
+}
+
 const KVSTORE_PROTOCOL_ADDRESS = '13vGYFqfJsFYaA3mheYgPKuishLG7sYDaE'
 
 /**
@@ -11,10 +17,10 @@ const KVSTORE_PROTOCOL_ADDRESS = '13vGYFqfJsFYaA3mheYgPKuishLG7sYDaE'
  *
  * @returns {Promise<String>} The value from the store
  */
-const get = async (key, defaultValue=undefined) => {
+const get = async (key, defaultValue=undefined, config=defaultConfig) => {
   const protectedKey = await SDK.createHmac({
     data: key,
-    protocolID: [0, 'kvstore'],
+    protocolID: config.protocolID,
     keyID: key
   })
   const result = await parapet({
@@ -32,7 +38,7 @@ const get = async (key, defaultValue=undefined) => {
         }
       }
     },
-    resolvers: ['http://localhost:3103']
+    resolvers: config.resolvers
   })
   if (result.length === 0) {
     if (defaultValue !== undefined) {
@@ -51,10 +57,10 @@ const get = async (key, defaultValue=undefined) => {
  *
  * @returns {Promise} Promise that resolves when the value has been stored
  */
-const set = async (key, value) => {
+const set = async (key, value, config=defaultConfig) => {
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
-    protocolID: [0, 'kvstore'],
+    protocolID: config.protocolID,
     keyID: key
   })
 
@@ -73,7 +79,7 @@ const set = async (key, value) => {
         }
       }
     },
-    resolvers: ['http://localhost:3103']
+    resolvers: config.resolvers
   })
 
   if (existing_tokens.length > 0 && existing_tokens[0].value != value) {
@@ -83,7 +89,7 @@ const set = async (key, value) => {
       outputIndex: kvstoreToken.token.outputIndex,
       lockingScript: kvstoreToken.token.lockingScript,
       outputAmount: kvstoreToken.token.outputAmount,
-      protocolID: [0, 'kvstore'],
+      protocolID: config.protocolID,
       keyID: key
     })
 
@@ -116,14 +122,14 @@ const set = async (key, value) => {
     await SDK.createAction({
       description: `Set a value for ${key}`,
       outputs: [{
-        satoshis: 1000,
+        satoshis: config.tokenAmount,
         script: await pushdrop.create({
           fields: [
             KVSTORE_PROTOCOL_ADDRESS,
             Buffer.from(protectedKey),
             value
           ],
-          protocolID: [0, 'kvstore'],
+          protocolID: config.protocolID,
           keyID: key
         })
       }],
@@ -140,10 +146,10 @@ const set = async (key, value) => {
  *
  * @returns {Promise} Promise that resolves when the value has been deleted
  */
-const remove = async (key) => {
+const remove = async (key, config=defaultConfig) => {
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
-    protocolID: [0, 'kvstore'],
+    protocolID: config.protocolID,
     keyID: key
   })
 
@@ -162,7 +168,7 @@ const remove = async (key) => {
         }
       }
     },
-    resolvers: ['http://localhost:3103']
+    resolvers: config.resolvers
   })
 
   if (existing_tokens.length > 0) {
@@ -172,7 +178,7 @@ const remove = async (key) => {
       outputIndex: kvstoreToken.token.outputIndex,
       lockingScript: kvstoreToken.token.lockingScript,
       outputAmount: kvstoreToken.token.outputAmount,
-      protocolID: [0, 'kvstore'],
+      protocolID: config.protocolID,
       keyID: key
     })
 
