@@ -30,7 +30,7 @@
   "dependencies": {
     "@babbage/sdk": "^0.4.5",
     "parapet-js": "^0.1.4",
-    "pushdrop": "^0.1.8"
+    "pushdrop": "^0.1.9"
   },
   "devDependencies": {
     "documentation": "^14.0.0",

@@ -12,7 +12,7 @@ KVStore is a simple, un-permissioned key-value storage and retrieval system that
 import { get, set } from 'babbage-kvstore'
 
 // Set a value
-set({'name', 'Bob')
+set('name', 'Bob')
 
 // Retrieve a value
 get('name') // => 'Bob'
