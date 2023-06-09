@@ -1,14 +1,14 @@
-const parapet = require('parapet-js')
+const { Authrite } = require('authrite-js')
 const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
 
 const defaultConfig = {
-  resolvers: undefined,
+  confederacyHost: 'https://confederacy.babbage.systems',
   protocolID: [0, 'kvstore'],
-  tokenAmount: 1000
+  tokenAmount: 1000,
+  topic: 'kvstore',
+  authriteConfig: undefined
 }
-
-const KVSTORE_PROTOCOL_ADDRESS = '13vGYFqfJsFYaA3mheYgPKuishLG7sYDaE'
 
 /**
  * Gets a value from the store.
@@ -17,36 +17,34 @@ const KVSTORE_PROTOCOL_ADDRESS = '13vGYFqfJsFYaA3mheYgPKuishLG7sYDaE'
  *
  * @returns {Promise<String>} The value from the store
  */
-const get = async (key, defaultValue=undefined, config=defaultConfig) => {
+const get = async (key, defaultValue = undefined, config = defaultConfig) => {
+  const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: key,
     protocolID: config.protocolID,
     keyID: key
   })
-  const result = await parapet({
-    bridge: KVSTORE_PROTOCOL_ADDRESS,
-    request: {
-      type: 'json-query',
-      query: {
-        v: 3,
-        q: {
-          collection: 'kvstore',
-          find: {
-            protectedKey: Buffer.from(protectedKey).toString('base64')
-          },
-          limit: 1
-        }
-      }
+  const result = await client.request(`${config.confederacyHost}/lookup`, {
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json'
     },
-    resolvers: config.resolvers
+    body: JSON.stringify({
+      protectedKey: Buffer.from(protectedKey).toString('base64')
+    })
   })
-  if (result.length === 0) {
+  const utxos = await result.body.json()
+  if (utxos.length === 0) {
     if (defaultValue !== undefined) {
       return defaultValue
     }
     return undefined
   }
-  return result[0].value
+  const decoded = await pushdrop.decode({
+    script: utxos[0].outputScript,
+    fieldFormat: 'utf8'
+  })
+  return decoded.fields[1]
 }
 
 /**
@@ -57,49 +55,49 @@ const get = async (key, defaultValue=undefined, config=defaultConfig) => {
  *
  * @returns {Promise} Promise that resolves when the value has been stored
  */
-const set = async (key, value, config=defaultConfig) => {
+const set = async (key, value, config = defaultConfig) => {
+  const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
     protocolID: config.protocolID,
     keyID: key
   })
 
-  const existing_tokens = await parapet({
-    bridge: KVSTORE_PROTOCOL_ADDRESS,
-    request: {
-      type: 'json-query',
-      query: {
-        v: 3,
-        q: {
-          collection: 'kvstore',
-          find: {
-            protectedKey: Buffer.from(protectedKey).toString('base64')
-          },
-          limit: 1
-        }
-      }
+  const result = await client.request(`${config.confederacyHost}/lookup`, {
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json'
     },
-    resolvers: config.resolvers
+    body: JSON.stringify({
+      protectedKey: Buffer.from(protectedKey).toString('base64')
+    })
   })
+  const existingTokens = await result.body.json()
 
-  if (existing_tokens.length > 0 && existing_tokens[0].value != value) {
-    const kvstoreToken = existing_tokens[0]
+  let action
+  if (existingTokens.length > 0) {
+    const decoded = await pushdrop.decode({
+      script: existingTokens[0].outputScript,
+      fieldFormat: 'utf8'
+    })
+    if (decoded.fields[1] === value) return
+    const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
-      prevTxId: kvstoreToken.token.txid,
-      outputIndex: kvstoreToken.token.outputIndex,
-      lockingScript: kvstoreToken.token.lockingScript,
-      outputAmount: kvstoreToken.token.outputAmount,
+      prevTxId: kvstoreToken.txid,
+      outputIndex: kvstoreToken.outputIndex,
+      lockingScript: kvstoreToken.outputScript,
+      outputAmount: kvstoreToken.outputAmount,
       protocolID: config.protocolID,
       keyID: key
     })
 
-    await SDK.createAction({
+    action = await SDK.createAction({
       description: `Update the value for ${key}`,
       inputs: {
         [kvstoreToken.token.txid]: {
-          ...kvstoreToken.token,
+          ...kvstoreToken,
           outputsToRedeem: [{
-            index: kvstoreToken.token.outputIndex,
+            index: kvstoreToken.outputIndex,
             unlockingScript
           }]
         }
@@ -108,34 +106,40 @@ const set = async (key, value, config=defaultConfig) => {
         satoshis: 500,
         script: await pushdrop.create({
           fields: [
-            KVSTORE_PROTOCOL_ADDRESS,
-            Buffer.from(protectedKey),
-            value
-          ],
-          protocolID: [0, 'kvstore'],
-          keyID: key
-        })
-      }],
-      bridges: [KVSTORE_PROTOCOL_ADDRESS]
-    })
-  } else {
-    await SDK.createAction({
-      description: `Set a value for ${key}`,
-      outputs: [{
-        satoshis: config.tokenAmount,
-        script: await pushdrop.create({
-          fields: [
-            KVSTORE_PROTOCOL_ADDRESS,
             Buffer.from(protectedKey),
             value
           ],
           protocolID: config.protocolID,
           keyID: key
         })
-      }],
-      bridges: [KVSTORE_PROTOCOL_ADDRESS]
+      }]
+    })
+  } else {
+    action = await SDK.createAction({
+      description: `Set a value for ${key}`,
+      outputs: [{
+        satoshis: config.tokenAmount,
+        script: await pushdrop.create({
+          fields: [
+            Buffer.from(protectedKey),
+            value
+          ],
+          protocolID: config.protocolID,
+          keyID: key
+        })
+      }]
     })
   }
+  await client.request(`${config.confederacyHost}/submit`, {
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      transaction: action,
+      topics: [config.topic]
+    })
+  })
 }
 
 /**
@@ -146,54 +150,57 @@ const set = async (key, value, config=defaultConfig) => {
  *
  * @returns {Promise} Promise that resolves when the value has been deleted
  */
-const remove = async (key, config=defaultConfig) => {
+const remove = async (key, config = defaultConfig) => {
+  const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
     protocolID: config.protocolID,
     keyID: key
   })
 
-  const existing_tokens = await parapet({
-    bridge: KVSTORE_PROTOCOL_ADDRESS,
-    request: {
-      type: 'json-query',
-      query: {
-        v: 3,
-        q: {
-          collection: 'kvstore',
-          find: {
-            protectedKey: Buffer.from(protectedKey).toString('base64')
-          },
-          limit: 1
-        }
-      }
+  const result = await client.request(`${config.confederacyHost}/lookup`, {
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json'
     },
-    resolvers: config.resolvers
+    body: JSON.stringify({
+      protectedKey: Buffer.from(protectedKey).toString('base64')
+    })
   })
+  const existingTokens = await result.body.json()
 
-  if (existing_tokens.length > 0) {
-    const kvstoreToken = existing_tokens[0]
+  if (existingTokens.length > 0) {
+    const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
-      prevTxId: kvstoreToken.token.txid,
-      outputIndex: kvstoreToken.token.outputIndex,
-      lockingScript: kvstoreToken.token.lockingScript,
-      outputAmount: kvstoreToken.token.outputAmount,
+      prevTxId: kvstoreToken.txid,
+      outputIndex: kvstoreToken.outputIndex,
+      lockingScript: kvstoreToken.outputScript,
+      outputAmount: kvstoreToken.outputAmount,
       protocolID: config.protocolID,
       keyID: key
     })
 
-    await SDK.createAction({
+    const action = await SDK.createAction({
       description: `Delete the value for ${key}`,
       inputs: {
         [kvstoreToken.token.txid]: {
           ...kvstoreToken.token,
           outputsToRedeem: [{
-            index: kvstoreToken.token.outputIndex,
+            index: kvstoreToken.outputIndex,
             unlockingScript
           }]
         }
+      }
+    })
+    await client.request(`${config.confederacyHost}/submit`, {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json'
       },
-      bridges: [KVSTORE_PROTOCOL_ADDRESS]
+      body: JSON.stringify({
+        transaction: action,
+        topics: [config.topic]
+      })
     })
   }
 }
