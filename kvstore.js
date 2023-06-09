@@ -17,7 +17,8 @@ const defaultConfig = {
  *
  * @returns {Promise<String>} The value from the store
  */
-const get = async (key, defaultValue = undefined, config = defaultConfig) => {
+const get = async (key, defaultValue = undefined, config = {}) => {
+  config = { ...defaultConfig, ...config }
   const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: key,
@@ -30,10 +31,13 @@ const get = async (key, defaultValue = undefined, config = defaultConfig) => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      protectedKey: Buffer.from(protectedKey).toString('base64')
+      provider: 'kvstore',
+      query: {
+        protectedKey: Buffer.from(protectedKey).toString('base64')
+      }
     })
   })
-  const utxos = await result.body.json()
+  const utxos = await result.json()
   if (utxos.length === 0) {
     if (defaultValue !== undefined) {
       return defaultValue
@@ -55,7 +59,8 @@ const get = async (key, defaultValue = undefined, config = defaultConfig) => {
  *
  * @returns {Promise} Promise that resolves when the value has been stored
  */
-const set = async (key, value, config = defaultConfig) => {
+const set = async (key, value, config = {}) => {
+  config = { ...defaultConfig, ...config }
   const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
@@ -69,10 +74,13 @@ const set = async (key, value, config = defaultConfig) => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      protectedKey: Buffer.from(protectedKey).toString('base64')
+      provider: 'kvstore',
+      query: {
+        protectedKey: Buffer.from(protectedKey).toString('base64')
+      }
     })
   })
-  const existingTokens = await result.body.json()
+  const existingTokens = await result.json()
 
   let action
   if (existingTokens.length > 0) {
@@ -84,9 +92,9 @@ const set = async (key, value, config = defaultConfig) => {
     const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
       prevTxId: kvstoreToken.txid,
-      outputIndex: kvstoreToken.outputIndex,
+      outputIndex: kvstoreToken.vout,
       lockingScript: kvstoreToken.outputScript,
-      outputAmount: kvstoreToken.outputAmount,
+      outputAmount: kvstoreToken.satoshis,
       protocolID: config.protocolID,
       keyID: key
     })
@@ -94,10 +102,19 @@ const set = async (key, value, config = defaultConfig) => {
     action = await SDK.createAction({
       description: `Update the value for ${key}`,
       inputs: {
-        [kvstoreToken.token.txid]: {
+        [kvstoreToken.txid]: {
           ...kvstoreToken,
+          inputs: typeof kvstoreToken.inputs === 'string'
+            ? JSON.parse(kvstoreToken.inputs)
+            : kvstoreToken.inputs,
+          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+            ? JSON.parse(kvstoreToken.mapiResponses)
+            : kvstoreToken.mapiResponses,
+          proof: typeof kvstoreToken.proof === 'string'
+            ? JSON.parse(kvstoreToken.proof)
+            : kvstoreToken.proof,
           outputsToRedeem: [{
-            index: kvstoreToken.outputIndex,
+            index: kvstoreToken.vout,
             unlockingScript
           }]
         }
@@ -136,7 +153,7 @@ const set = async (key, value, config = defaultConfig) => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      transaction: action,
+      ...action,
       topics: [config.topic]
     })
   })
@@ -150,7 +167,8 @@ const set = async (key, value, config = defaultConfig) => {
  *
  * @returns {Promise} Promise that resolves when the value has been deleted
  */
-const remove = async (key, config = defaultConfig) => {
+const remove = async (key, config = {}) => {
+  config = { ...defaultConfig, ...config }
   const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
@@ -164,18 +182,21 @@ const remove = async (key, config = defaultConfig) => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      protectedKey: Buffer.from(protectedKey).toString('base64')
+      provider: 'kvstore',
+      query: {
+        protectedKey: Buffer.from(protectedKey).toString('base64')
+      }
     })
   })
-  const existingTokens = await result.body.json()
+  const existingTokens = await result.json()
 
   if (existingTokens.length > 0) {
     const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
       prevTxId: kvstoreToken.txid,
-      outputIndex: kvstoreToken.outputIndex,
+      outputIndex: kvstoreToken.vout,
       lockingScript: kvstoreToken.outputScript,
-      outputAmount: kvstoreToken.outputAmount,
+      outputAmount: kvstoreToken.satoshis,
       protocolID: config.protocolID,
       keyID: key
     })
@@ -183,10 +204,10 @@ const remove = async (key, config = defaultConfig) => {
     const action = await SDK.createAction({
       description: `Delete the value for ${key}`,
       inputs: {
-        [kvstoreToken.token.txid]: {
+        [kvstoreToken.txid]: {
           ...kvstoreToken.token,
           outputsToRedeem: [{
-            index: kvstoreToken.outputIndex,
+            index: kvstoreToken.vout,
             unlockingScript
           }]
         }
@@ -198,7 +219,7 @@ const remove = async (key, config = defaultConfig) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        transaction: action,
+        ...action,
         topics: [config.topic]
       })
     })
