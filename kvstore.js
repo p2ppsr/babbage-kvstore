@@ -205,7 +205,16 @@ const remove = async (key, config = {}) => {
       description: `Delete the value for ${key}`,
       inputs: {
         [kvstoreToken.txid]: {
-          ...kvstoreToken.token,
+          ...kvstoreToken,
+          inputs: typeof kvstoreToken.inputs === 'string'
+            ? JSON.parse(kvstoreToken.inputs)
+            : kvstoreToken.inputs,
+          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+            ? JSON.parse(kvstoreToken.mapiResponses)
+            : kvstoreToken.mapiResponses,
+          proof: typeof kvstoreToken.proof === 'string'
+            ? JSON.parse(kvstoreToken.proof)
+            : kvstoreToken.proof,
           outputsToRedeem: [{
             index: kvstoreToken.vout,
             unlockingScript
