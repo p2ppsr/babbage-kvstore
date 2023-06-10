@@ -7,7 +7,10 @@ const defaultConfig = {
   protocolID: [0, 'kvstore'],
   tokenAmount: 1000,
   topic: 'kvstore',
-  authriteConfig: undefined
+  authriteConfig: undefined,
+  counterparty: undefined,
+  moveToSelf: false,
+  moveFromSelf: false
 }
 
 /**
@@ -23,7 +26,8 @@ const get = async (key, defaultValue = undefined, config = {}) => {
   const protectedKey = await SDK.createHmac({
     data: key,
     protocolID: config.protocolID,
-    keyID: key
+    keyID: key,
+    counterparty: config.counterparty
   })
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -44,11 +48,29 @@ const get = async (key, defaultValue = undefined, config = {}) => {
     }
     return undefined
   }
-  const decoded = await pushdrop.decode({
-    script: utxos[0].outputScript,
-    fieldFormat: 'utf8'
+  const correctKey = await SDK.getPublicKey({
+    protocolID: config.protocolID,
+    keyID: key,
+    counterparty: config.counterparty
   })
-  return decoded.fields[1]
+  for (const utxo of utxos) {
+    try {
+      const decoded = await pushdrop.decode({
+        script: utxo.outputScript,
+        fieldFormat: 'utf8'
+      })
+      if (decoded.lockingPublicKey !== correctKey) {
+        throw new Error('Token is not from correct key.')
+      }
+      return decoded.fields[1]
+    } catch (e) {
+      continue
+    }
+  }
+  if (defaultValue !== undefined) {
+    return defaultValue
+  }
+  return undefined
 }
 
 /**
@@ -61,11 +83,15 @@ const get = async (key, defaultValue = undefined, config = {}) => {
  */
 const set = async (key, value, config = {}) => {
   config = { ...defaultConfig, ...config }
+  if (config.moveFromSelf && config.moveToSelf) {
+    throw new Error('moveFromSelf and moveToSelf cannot both be true at the same time.')
+  }
   const client = new Authrite(config.authriteConfig)
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
     protocolID: config.protocolID,
-    keyID: key
+    keyID: key,
+    counterparty: config.moveFromSelf ? 'self' : config.counterparty
   })
 
   const result = await client.request(`${config.confederacyHost}/lookup`, {
@@ -96,7 +122,8 @@ const set = async (key, value, config = {}) => {
       lockingScript: kvstoreToken.outputScript,
       outputAmount: kvstoreToken.satoshis,
       protocolID: config.protocolID,
-      keyID: key
+      keyID: key,
+      counterparty: config.moveFromSelf ? 'self' : config.counterparty
     })
 
     action = await SDK.createAction({
@@ -127,7 +154,8 @@ const set = async (key, value, config = {}) => {
             value
           ],
           protocolID: config.protocolID,
-          keyID: key
+          keyID: key,
+          counterparty: config.moveToSelf ? 'self' : config.counterparty
         })
       }]
     })
@@ -142,7 +170,8 @@ const set = async (key, value, config = {}) => {
             value
           ],
           protocolID: config.protocolID,
-          keyID: key
+          keyID: key,
+          counterparty: config.moveToSelf ? 'self' : config.counterparty
         })
       }]
     })
@@ -162,8 +191,7 @@ const set = async (key, value, config = {}) => {
 /**
  * Deletes a value from the store.
  *
- * @param {String} key The key for the value to set
- * @param {String} value The value to store
+ * @param {String} key The key for the value to remove
  *
  * @returns {Promise} Promise that resolves when the value has been deleted
  */
@@ -173,7 +201,8 @@ const remove = async (key, config = {}) => {
   const protectedKey = await SDK.createHmac({
     data: Uint8Array.from(Buffer.from(key)),
     protocolID: config.protocolID,
-    keyID: key
+    keyID: key,
+    counterparty: config.counterparty
   })
 
   const result = await client.request(`${config.confederacyHost}/lookup`, {
@@ -198,7 +227,8 @@ const remove = async (key, config = {}) => {
       lockingScript: kvstoreToken.outputScript,
       outputAmount: kvstoreToken.satoshis,
       protocolID: config.protocolID,
-      keyID: key
+      keyID: key,
+      counterparty: config.counterparty
     })
 
     const action = await SDK.createAction({

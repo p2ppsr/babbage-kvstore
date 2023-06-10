@@ -18,17 +18,20 @@ set('name', 'Bob')
 get('name') // => 'Bob'
 ```
 
-## Default Config Object
+## The Config Object
 
-```js
-{
-  confederacyHost: 'https://confederacy.babbage.systems',
-  protocolID: [0, 'kvstore'],
-  tokenAmount: 1000,
-  topic: 'kvstore',
-  authriteConfig: undefined
-}
-```
+None of these values are required, but you can use them to customize and greatly extend the behavior of KVStore.
+
+Name               | Description               | Default Value
+-------------------|---------------------------|---------------------
+`confederacyHost`  | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
+`topic`            | Overlay network node topic where UTXOs are stored and retrieved | `'kvstore'`
+`protocolID`       | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
+`tokenAmount`      | Sets the number of satoshis in each KVStore UTXO | `1000`
+`authriteConfig`   | Parameters used to construct the Authrite client used to communicate with the overlay network node | `undefined`
+`counterparty`     | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
+`moveToSelf`       | Move the token sent from the counterparty to self | `false`
+`moveFromSelf`     | Move the token owned by self to the counterparty | `false`
 
 ## API
 
@@ -51,7 +54,7 @@ Gets a value from the store.
 
 *   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to get
 *   `defaultValue`   (optional, default `undefined`)
-*   `config`   (optional, default `defaultConfig`)
+*   `config`   (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** The value from the store
 
@@ -63,7 +66,7 @@ Sets a new value in the store, overwriting any existing value.
 
 *   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to set
 *   `value` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value to store
-*   `config`   (optional, default `defaultConfig`)
+*   `config`   (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** Promise that resolves when the value has been stored
 
@@ -73,9 +76,8 @@ Deletes a value from the store.
 
 #### Parameters
 
-*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to set
-*   `config`   (optional, default `defaultConfig`)
-*   `value` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value to store
+*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to remove
+*   `config`   (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** Promise that resolves when the value has been deleted
 
