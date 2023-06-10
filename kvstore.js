@@ -2,6 +2,7 @@ const { Authrite } = require('authrite-js')
 const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
 const { getPaymentAddress } = require('sendover')
+const bsv = require('babbage-bsv')
 
 const defaultConfig = {
   confederacyHost: 'https://confederacy.babbage.systems',
@@ -17,28 +18,8 @@ const defaultConfig = {
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
 
-/**
- * Gets a value from the store.
- *
- * @param {String} key The key for the value to get
- *
- * @returns {Promise<String>} The value from the store
- */
-const get = async (key, defaultValue = undefined, config = {}) => {
-  config = { ...defaultConfig, ...config }
+const findFromOverlay = async (protectedKey, config) => {
   const client = new Authrite(config.authriteConfig)
-  let protectedKey
-  if (config.viewpoint === 'identity') {
-    protectedKey = await SDK.createHmac({
-      data: key,
-      protocolID: config.protocolID,
-      keyID: key,
-      counterparty: config.counterparty
-    })
-  } else {
-    //
-    //[compute HMAC using hash of viewpoint key]
-  }
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
     headers: {
@@ -51,7 +32,52 @@ const get = async (key, defaultValue = undefined, config = {}) => {
       }
     })
   })
-  const utxos = await result.json()
+  return await result.json()
+}
+
+const submitToOverlay = async (tx, config) => {
+  const client = new Authrite(config.authriteConfig)
+  const result = await client.request(`${config.confederacyHost}/submit`, {
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      ...tx,
+      topics: config.topics
+    })
+  })
+  return await result.json()
+}
+
+const getProtectedKey = async (key, config) => {
+  if (config.viewpoint === 'identity') {
+    return await SDK.createHmac({
+      data: key,
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.counterparty
+    })
+  } else {
+    const invoiceNumber = computeInvoiceNumber(config.protocolID, key)
+    return bsv.crypto.Hash.sha256hmac(
+      bsv.crypto.Hash.sha256(Buffer.from(config.viewpoint, 'hex')),
+      Buffer.from(invoiceNumber, 'utf8')
+    ).toString('base64')
+  }
+}
+
+/**
+ * Gets a value from the store.
+ *
+ * @param {String} key The key for the value to get
+ *
+ * @returns {Promise<String>} The value from the store
+ */
+const get = async (key, defaultValue = undefined, config = {}) => {
+  config = { ...defaultConfig, ...config }
+  const protectedKey = await getProtectedKey(key, config)
+  const utxos = await findFromOverlay(protectedKey, config)
   if (utxos.length === 0) {
     if (defaultValue !== undefined) {
       return defaultValue
@@ -107,32 +133,8 @@ const set = async (key, value, config = {}) => {
   if (config.moveFromSelf && config.moveToSelf) {
     throw new Error('moveFromSelf and moveToSelf cannot both be true at the same time.')
   }
-  const client = new Authrite(config.authriteConfig)
-  let protectedKey
-  if (config.viewpoint === 'identity') {
-    protectedKey = await SDK.createHmac({
-      data: Uint8Array.from(Buffer.from(key)),
-      protocolID: config.protocolID,
-      keyID: key,
-      counterparty: config.moveFromSelf ? 'self' : config.counterparty
-    })
-  } else {
-    //
-  }
-
-  const result = await client.request(`${config.confederacyHost}/lookup`, {
-    method: 'post',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      provider: 'kvstore',
-      query: {
-        protectedKey: Buffer.from(protectedKey).toString('base64')
-      }
-    })
-  })
-  const existingTokens = await result.json()
+  const protectedKey = await getProtectedKey(key, config)
+  const existingTokens = await findFromOverlay(protectedKey, config)
 
   let action
   if (existingTokens.length > 0) {
@@ -140,7 +142,10 @@ const set = async (key, value, config = {}) => {
       script: existingTokens[0].outputScript,
       fieldFormat: 'utf8'
     })
+
+    // If the value is already correct, there is no need to update it
     if (decoded.fields[1] === value) return
+
     const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
       prevTxId: kvstoreToken.txid,
@@ -204,16 +209,7 @@ const set = async (key, value, config = {}) => {
       }]
     })
   }
-  await client.request(`${config.confederacyHost}/submit`, {
-    method: 'post',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      ...action,
-      topics: config.topics
-    })
-  })
+  return await submitToOverlay(action, config)
 }
 
 /**
@@ -225,77 +221,43 @@ const set = async (key, value, config = {}) => {
  */
 const remove = async (key, config = {}) => {
   config = { ...defaultConfig, ...config }
-  const client = new Authrite(config.authriteConfig)
-  let protectedKey
-  if (config.viewpoint === 'identity') {
-    protectedKey = await SDK.createHmac({
-      data: Uint8Array.from(Buffer.from(key)),
-      protocolID: config.protocolID,
-      keyID: key,
-      counterparty: config.counterparty
-    })
-  } else {
-    //
+  const protectedKey = await getProtectedKey(key, config)
+  const existingTokens = await findFromOverlay(protectedKey, config)
+  if (existingTokens.length === 0) {
+    throw new Error('The item did not exist, no item was deleted.')
   }
-
-  const result = await client.request(`${config.confederacyHost}/lookup`, {
-    method: 'post',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      provider: 'kvstore',
-      query: {
-        protectedKey: Buffer.from(protectedKey).toString('base64')
-      }
-    })
+  const kvstoreToken = existingTokens[0]
+  const unlockingScript = await pushdrop.redeem({
+    prevTxId: kvstoreToken.txid,
+    outputIndex: kvstoreToken.vout,
+    lockingScript: kvstoreToken.outputScript,
+    outputAmount: kvstoreToken.satoshis,
+    protocolID: config.protocolID,
+    keyID: key,
+    counterparty: config.counterparty
   })
-  const existingTokens = await result.json()
-
-  if (existingTokens.length > 0) {
-    const kvstoreToken = existingTokens[0]
-    const unlockingScript = await pushdrop.redeem({
-      prevTxId: kvstoreToken.txid,
-      outputIndex: kvstoreToken.vout,
-      lockingScript: kvstoreToken.outputScript,
-      outputAmount: kvstoreToken.satoshis,
-      protocolID: config.protocolID,
-      keyID: key,
-      counterparty: config.counterparty
-    })
-
-    const action = await SDK.createAction({
-      description: `Delete the value for ${key}`,
-      inputs: {
-        [kvstoreToken.txid]: {
-          ...kvstoreToken,
-          inputs: typeof kvstoreToken.inputs === 'string'
-            ? JSON.parse(kvstoreToken.inputs)
-            : kvstoreToken.inputs,
-          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
-            ? JSON.parse(kvstoreToken.mapiResponses)
-            : kvstoreToken.mapiResponses,
-          proof: typeof kvstoreToken.proof === 'string'
-            ? JSON.parse(kvstoreToken.proof)
-            : kvstoreToken.proof,
-          outputsToRedeem: [{
-            index: kvstoreToken.vout,
-            unlockingScript
-          }]
-        }
+  const action = await SDK.createAction({
+    description: `Delete the value for ${key}`,
+    inputs: {
+      [kvstoreToken.txid]: {
+        ...kvstoreToken,
+        inputs: typeof kvstoreToken.inputs === 'string'
+          ? JSON.parse(kvstoreToken.inputs)
+          : kvstoreToken.inputs,
+        mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+          ? JSON.parse(kvstoreToken.mapiResponses)
+          : kvstoreToken.mapiResponses,
+        proof: typeof kvstoreToken.proof === 'string'
+          ? JSON.parse(kvstoreToken.proof)
+          : kvstoreToken.proof,
+        outputsToRedeem: [{
+          index: kvstoreToken.vout,
+          unlockingScript
+        }]
       }
-    })
-    await client.request(`${config.confederacyHost}/submit`, {
-      method: 'post',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        ...action,
-        topics: config.topics
-      })
-    })
-  }
+    }
+  })
+  return await submitToOverlay(action, config)
 }
 
 module.exports = { get, set, remove }
