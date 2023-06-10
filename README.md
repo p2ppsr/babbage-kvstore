@@ -32,7 +32,7 @@ Name               | Description               | Default Value
 `counterparty`     | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
 `moveToSelf`       | Move the token sent from the counterparty to self | `false`
 `moveFromSelf`     | Move the token owned by self to the counterparty | `false`
-`viewpoint`        | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. | `identity`
+`viewpoint`        | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
 
 ## API
 

@@ -13,7 +13,7 @@ const defaultConfig = {
   counterparty: undefined,
   moveToSelf: false,
   moveFromSelf: false,
-  viewpoint: 'identity'
+  viewpoint: 'localToSelf'
 }
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
@@ -51,7 +51,7 @@ const submitToOverlay = async (tx, config) => {
 }
 
 const getProtectedKey = async (key, config) => {
-  if (config.viewpoint === 'identity') {
+  if (config.viewpoint === 'localToSelf') {
     return await SDK.createHmac({
       data: key,
       protocolID: config.protocolID,
@@ -85,7 +85,7 @@ const get = async (key, defaultValue = undefined, config = {}) => {
     return undefined
   }
   let correctKey
-  if (config.viewpoint === 'identity') {
+  if (config.viewpoint === 'localToSelf') {
     correctKey = await SDK.getPublicKey({
       protocolID: config.protocolID,
       keyID: key,
@@ -143,9 +143,6 @@ const set = async (key, value, config = {}) => {
       fieldFormat: 'utf8'
     })
 
-    // If the value is already correct, there is no need to update it
-    if (decoded.fields[1] === value) return
-
     const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
       prevTxId: kvstoreToken.txid,
@@ -178,7 +175,7 @@ const set = async (key, value, config = {}) => {
         }
       },
       outputs: [{
-        satoshis: 500,
+        satoshis: config.tokenAmount,
         script: await pushdrop.create({
           fields: [
             Buffer.from(protectedKey),
@@ -187,7 +184,7 @@ const set = async (key, value, config = {}) => {
           protocolID: config.protocolID,
           keyID: key,
           counterparty: config.moveToSelf ? 'self' : config.counterparty,
-          ownedByCreator: config.viewpoint !== 'identity'
+          counterpartyCanVerifyMyOwnership: config.viewpoint !== 'localToSelf'
         })
       }]
     })
@@ -204,7 +201,7 @@ const set = async (key, value, config = {}) => {
           protocolID: config.protocolID,
           keyID: key,
           counterparty: config.moveToSelf ? 'self' : config.counterparty,
-          ownedByCreator: config.viewpoint !== 'identity'
+          ownedByCreator: config.viewpoint !== 'localToSelf'
         })
       }]
     })
