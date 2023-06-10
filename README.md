@@ -25,13 +25,14 @@ None of these values are required, but you can use them to customize and greatly
 Name               | Description               | Default Value
 -------------------|---------------------------|---------------------
 `confederacyHost`  | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
-`topic`            | Overlay network node topic where UTXOs are stored and retrieved | `'kvstore'`
+`topics`           | Overlay network node topics where UTXOs are stored and retrieved | `['kvstore']`
 `protocolID`       | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
 `tokenAmount`      | Sets the number of satoshis in each KVStore UTXO | `1000`
 `authriteConfig`   | Parameters used to construct the Authrite client used to communicate with the overlay network node | `undefined`
 `counterparty`     | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
 `moveToSelf`       | Move the token sent from the counterparty to self | `false`
 `moveFromSelf`     | Move the token owned by self to the counterparty | `false`
+`viewpoint`        | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. | `identity`
 
 ## API
 

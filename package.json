@@ -30,7 +30,8 @@
   "dependencies": {
     "@babbage/sdk": "^0.4.25",
     "authrite-js": "^0.2.15",
-    "pushdrop": "^0.1.19"
+    "pushdrop": "^0.1.19",
+    "sendover": "^1.1.8"
   },
   "devDependencies": {
     "documentation": "^14.0.0",

@@ -1,17 +1,21 @@
 const { Authrite } = require('authrite-js')
 const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
+const { getPaymentAddress } = require('sendover')
 
 const defaultConfig = {
   confederacyHost: 'https://confederacy.babbage.systems',
   protocolID: [0, 'kvstore'],
   tokenAmount: 1000,
-  topic: 'kvstore',
+  topics: ['kvstore'],
   authriteConfig: undefined,
   counterparty: undefined,
   moveToSelf: false,
-  moveFromSelf: false
+  moveFromSelf: false,
+  viewpoint: 'identity'
 }
+
+const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
 
 /**
  * Gets a value from the store.
@@ -23,12 +27,18 @@ const defaultConfig = {
 const get = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const client = new Authrite(config.authriteConfig)
-  const protectedKey = await SDK.createHmac({
-    data: key,
-    protocolID: config.protocolID,
-    keyID: key,
-    counterparty: config.counterparty
-  })
+  let protectedKey
+  if (config.viewpoint === 'identity') {
+    protectedKey = await SDK.createHmac({
+      data: key,
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.counterparty
+    })
+  } else {
+    //
+    //[compute HMAC using hash of viewpoint key]
+  }
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
     headers: {
@@ -48,11 +58,22 @@ const get = async (key, defaultValue = undefined, config = {}) => {
     }
     return undefined
   }
-  const correctKey = await SDK.getPublicKey({
-    protocolID: config.protocolID,
-    keyID: key,
-    counterparty: config.counterparty
-  })
+  let correctKey
+  if (config.viewpoint === 'identity') {
+    correctKey = await SDK.getPublicKey({
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.counterparty,
+      forSelf: true
+    })
+  } else {
+    correctKey = getPaymentAddress({
+      senderPrivateKey: '0000000000000000000000000000000000000000000000000000000000000001',
+      recipientPublicKey: config.viewpoint,
+      invoiceNumber: computeInvoiceNumber(config.protocolID, key),
+      returnType: 'publicKey'
+    })
+  }
   for (const utxo of utxos) {
     try {
       const decoded = await pushdrop.decode({
@@ -87,12 +108,17 @@ const set = async (key, value, config = {}) => {
     throw new Error('moveFromSelf and moveToSelf cannot both be true at the same time.')
   }
   const client = new Authrite(config.authriteConfig)
-  const protectedKey = await SDK.createHmac({
-    data: Uint8Array.from(Buffer.from(key)),
-    protocolID: config.protocolID,
-    keyID: key,
-    counterparty: config.moveFromSelf ? 'self' : config.counterparty
-  })
+  let protectedKey
+  if (config.viewpoint === 'identity') {
+    protectedKey = await SDK.createHmac({
+      data: Uint8Array.from(Buffer.from(key)),
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.moveFromSelf ? 'self' : config.counterparty
+    })
+  } else {
+    //
+  }
 
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -155,7 +181,8 @@ const set = async (key, value, config = {}) => {
           ],
           protocolID: config.protocolID,
           keyID: key,
-          counterparty: config.moveToSelf ? 'self' : config.counterparty
+          counterparty: config.moveToSelf ? 'self' : config.counterparty,
+          ownedByCreator: config.viewpoint !== 'identity'
         })
       }]
     })
@@ -171,7 +198,8 @@ const set = async (key, value, config = {}) => {
           ],
           protocolID: config.protocolID,
           keyID: key,
-          counterparty: config.moveToSelf ? 'self' : config.counterparty
+          counterparty: config.moveToSelf ? 'self' : config.counterparty,
+          ownedByCreator: config.viewpoint !== 'identity'
         })
       }]
     })
@@ -183,7 +211,7 @@ const set = async (key, value, config = {}) => {
     },
     body: JSON.stringify({
       ...action,
-      topics: [config.topic]
+      topics: config.topics
     })
   })
 }
@@ -198,12 +226,17 @@ const set = async (key, value, config = {}) => {
 const remove = async (key, config = {}) => {
   config = { ...defaultConfig, ...config }
   const client = new Authrite(config.authriteConfig)
-  const protectedKey = await SDK.createHmac({
-    data: Uint8Array.from(Buffer.from(key)),
-    protocolID: config.protocolID,
-    keyID: key,
-    counterparty: config.counterparty
-  })
+  let protectedKey
+  if (config.viewpoint === 'identity') {
+    protectedKey = await SDK.createHmac({
+      data: Uint8Array.from(Buffer.from(key)),
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.counterparty
+    })
+  } else {
+    //
+  }
 
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -259,7 +292,7 @@ const remove = async (key, config = {}) => {
       },
       body: JSON.stringify({
         ...action,
-        topics: [config.topic]
+        topics: config.topics
       })
     })
   }
