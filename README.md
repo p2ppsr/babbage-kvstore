@@ -23,7 +23,7 @@ get('name') // => 'Bob'
 None of these values are required, but you can use them to customize and greatly extend the behavior of KVStore.
 
 Name               | Description               | Default Value
--------------------|---------------------------|---------------------
+\-------------------|---------------------------|---------------------
 `confederacyHost`  | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
 `topics`           | Overlay network node topics where UTXOs are stored and retrieved | `['kvstore']`
 `protocolID`       | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
