@@ -11,8 +11,8 @@ const defaultConfig = {
   topics: ['kvstore'],
   authriteConfig: undefined,
   counterparty: undefined,
-  moveToSelf: false,
-  moveFromSelf: false,
+  receiveFromCounterparty: false,
+  sendToCounterparty: false,
   viewpoint: 'localToSelf'
 }
 
@@ -64,7 +64,9 @@ const findFromOverlay = async (protectedKey, key, config) => {
         fieldFormat: 'buffer'
       })
       if (decoded.lockingPublicKey !== correctOwnerKey) {
-        throw new Error('Token is not from correct key.')
+        const e = new Error('Token is not from correct key')
+        e.code = 'ERR_INVALID_TOKEN'
+        throw e
       }
       // Use ECDSA to verify signature
       const hasValidSignature = bsv.crypto.ECDSA.verify(
@@ -153,8 +155,10 @@ const get = async (key, defaultValue = undefined, config = {}) => {
  */
 const set = async (key, value, config = {}) => {
   config = { ...defaultConfig, ...config }
-  if (config.moveFromSelf && config.moveToSelf) {
-    throw new Error('moveFromSelf and moveToSelf cannot both be true at the same time.')
+  if (config.sendToCounterparty && config.receiveFromCounterparty) {
+    const e = new Error('sendToCounterparty and receiveFromCounterparty cannot both be true at the same time.')
+    e.code = 'ERR_NO_SEND_AND_RECEIVE_AT_SAME_TIME'
+    throw e
   }
   const protectedKey = await getProtectedKey(key, config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
@@ -169,7 +173,7 @@ const set = async (key, value, config = {}) => {
       outputAmount: kvstoreToken.satoshis,
       protocolID: config.protocolID,
       keyID: key,
-      counterparty: config.moveFromSelf ? 'self' : config.counterparty
+      counterparty: config.sendToCounterparty ? 'self' : config.counterparty
     })
 
     action = await SDK.createAction({
@@ -201,12 +205,17 @@ const set = async (key, value, config = {}) => {
           ],
           protocolID: config.protocolID,
           keyID: key,
-          counterparty: config.moveToSelf ? 'self' : config.counterparty,
+          counterparty: config.receiveFromCounterparty ? 'self' : config.counterparty,
           counterpartyCanVerifyMyOwnership: config.viewpoint !== 'localToSelf'
         })
       }]
     })
   } else {
+    if (config.receiveFromCountarparty) {
+      const e = new Error('There is no token to receive from this counterparty')
+      e.code = 'ERR_NO_TOKEN_FROM_COUNTERPARTY'
+      throw e
+    }
     action = await SDK.createAction({
       description: `Set a value for ${key}`,
       outputs: [{
@@ -218,7 +227,7 @@ const set = async (key, value, config = {}) => {
           ],
           protocolID: config.protocolID,
           keyID: key,
-          counterparty: config.moveToSelf ? 'self' : config.counterparty,
+          counterparty: config.receiveFromCounterparty ? 'self' : config.counterparty,
           ownedByCreator: config.viewpoint !== 'localToSelf'
         })
       }]
@@ -240,7 +249,9 @@ const remove = async (key, config = {}) => {
   const protectedKey = await getProtectedKey(key, config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
   if (existingTokens.length === 0) {
-    throw new Error('The item did not exist, no item was deleted.')
+    const e = new Error('The item did not exist, no item was deleted.')
+    e.code = 'ERR_NO_TOKEN'
+    throw e
   }
   const kvstoreToken = existingTokens[0]
   const unlockingScript = await pushdrop.redeem({

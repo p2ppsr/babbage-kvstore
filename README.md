@@ -30,8 +30,8 @@ Name               | Description               | Default Value
 `tokenAmount`      | Sets the number of satoshis in each KVStore UTXO | `1000`
 `authriteConfig`   | Parameters used to construct the Authrite client used to communicate with the overlay network node | `undefined`
 `counterparty`     | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
-`moveToSelf`       | Move the token sent from the counterparty to self | `false`
-`moveFromSelf`     | Move the token owned by self to the counterparty | `false`
+`receiveFromCounterparty`       | Move the token sent from the counterparty to self | `false`
+`sendToCounterparty`     | Move the token owned by self to the counterparty | `false`
 `viewpoint`        | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
 
 ## API
