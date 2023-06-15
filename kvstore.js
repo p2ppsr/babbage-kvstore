@@ -61,7 +61,7 @@ const findFromOverlay = async (protectedKey, key, config) => {
     try {
       const decoded = await pushdrop.decode({
         script: utxo.outputScript,
-        fieldFormat: 'utf8'
+        fieldFormat: 'buffer'
       })
       if (decoded.lockingPublicKey !== correctOwnerKey) {
         throw new Error('Token is not from correct key.')
@@ -79,7 +79,7 @@ const findFromOverlay = async (protectedKey, key, config) => {
       }
       filtered.push({
         ...utxo,
-        value: decoded.fields[1]
+        value: decoded.fields[1].toString('utf8')
       })
     } catch (e) {
       continue
