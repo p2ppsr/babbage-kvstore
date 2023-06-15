@@ -38,13 +38,13 @@ const findFromOverlay = async (protectedKey, key, config) => {
     correctOwnerKey = await SDK.getPublicKey({
       protocolID: config.protocolID,
       keyID: key,
-      counterparty: config.counterparty,
+      counterparty: config.sendToCounterparty ? 'self' : config.counterparty,
       forSelf: true
     })
     correctSigningKey = await SDK.getPublicKey({
       protocolID: config.protocolID,
       keyID: key,
-      counterparty: config.counterparty,
+      counterparty: config.sendToCounterparty ? 'self' : config.counterparty,
       forSelf: false
     })
   } else {
