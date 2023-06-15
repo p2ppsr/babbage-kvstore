@@ -105,13 +105,26 @@ const submitToOverlay = async (tx, config) => {
   return await result.json()
 }
 
-const getProtectedKey = async (key, config) => {
+/*
+context can be "searching" (looking for the token on the overlay), or "creating" (putting a new token on the overlay)
+*/
+const getProtectedKey = async (key, context = 'searching', config) => {
   if (config.viewpoint === 'localToSelf') {
+    let counterparty = config.counterparty
+    // counterparty should flip to self when:
+    // - context is searching and sendToCounterparty is true
+    // - context is creating and receiveFromCounterparty is true
+    if (
+      (context === 'searching' && config.sendToCounterparty) ||
+      (context === 'creating' && config.receiveFromCounterparty)
+    ) {
+      counterparty = 'self'
+    }
     return await SDK.createHmac({
       data: key,
       protocolID: config.protocolID,
       keyID: key,
-      counterparty: config.counterparty
+      counterparty
     })
   } else {
     const invoiceNumber = computeInvoiceNumber(config.protocolID, key)
@@ -133,7 +146,7 @@ const getProtectedKey = async (key, config) => {
  */
 const get = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
-  const protectedKey = await getProtectedKey(key, config)
+  const protectedKey = await getProtectedKey(key, 'searching', config)
   const utxos = await findFromOverlay(protectedKey, key, config)
   if (utxos.length === 0) {
     if (defaultValue !== undefined) {
@@ -160,7 +173,7 @@ const set = async (key, value, config = {}) => {
     e.code = 'ERR_NO_SEND_AND_RECEIVE_AT_SAME_TIME'
     throw e
   }
-  const protectedKey = await getProtectedKey(key, config)
+  const protectedKey = await getProtectedKey(key, 'searching', config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
 
   let action
@@ -200,7 +213,7 @@ const set = async (key, value, config = {}) => {
         satoshis: config.tokenAmount,
         script: await pushdrop.create({
           fields: [
-            Buffer.from(protectedKey),
+            await getProtectedKey(key, 'creating', config),
             value
           ],
           protocolID: config.protocolID,
@@ -222,7 +235,7 @@ const set = async (key, value, config = {}) => {
         satoshis: config.tokenAmount,
         script: await pushdrop.create({
           fields: [
-            Buffer.from(protectedKey),
+            await getProtectedKey(key, 'creating', config),
             value
           ],
           protocolID: config.protocolID,
@@ -246,7 +259,7 @@ const set = async (key, value, config = {}) => {
  */
 const remove = async (key, config = {}) => {
   config = { ...defaultConfig, ...config }
-  const protectedKey = await getProtectedKey(key, config)
+  const protectedKey = await getProtectedKey(key, 'searching', config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
   if (existingTokens.length === 0) {
     const e = new Error('The item did not exist, no item was deleted.')
