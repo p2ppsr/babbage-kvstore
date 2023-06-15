@@ -18,7 +18,7 @@ const defaultConfig = {
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
 
-const findFromOverlay = async (protectedKey, config) => {
+const findFromOverlay = async (protectedKey, key, config) => {
   const client = new Authrite(config.authriteConfig)
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -32,7 +32,60 @@ const findFromOverlay = async (protectedKey, config) => {
       }
     })
   })
-  return await result.json()
+  const utxos = await result.json()
+  let correctOwnerKey, correctSigningKey
+  if (config.viewpoint === 'localToSelf') {
+    correctOwnerKey = await SDK.getPublicKey({
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.counterparty,
+      forSelf: true
+    })
+    correctSigningKey = await SDK.getPublicKey({
+      protocolID: config.protocolID,
+      keyID: key,
+      counterparty: config.counterparty,
+      forSelf: false
+    })
+  } else {
+    correctOwnerKey = getPaymentAddress({
+      senderPrivateKey: '0000000000000000000000000000000000000000000000000000000000000001',
+      recipientPublicKey: config.viewpoint,
+      invoiceNumber: computeInvoiceNumber(config.protocolID, key),
+      returnType: 'publicKey'
+    })
+    correctSigningKey = correctOwnerKey
+  }
+  const filtered = []
+  for (const utxo of utxos) {
+    try {
+      const decoded = await pushdrop.decode({
+        script: utxo.outputScript,
+        fieldFormat: 'utf8'
+      })
+      if (decoded.lockingPublicKey !== correctOwnerKey) {
+        throw new Error('Token is not from correct key.')
+      }
+      // Use ECDSA to verify signature
+      const hasValidSignature = bsv.crypto.ECDSA.verify(
+        bsv.crypto.Hash.sha256(Buffer.concat(decoded.fields)),
+        bsv.crypto.Signature.fromString(decoded.signature),
+        bsv.PublicKey.fromString(correctSigningKey)
+      )
+      if (!hasValidSignature) {
+        const e = new Error('Invalid Signature')
+        e.code = 'ERR_INVALID_SIGNATURE'
+        throw e
+      }
+      filtered.push({
+        ...utxo,
+        value: decoded.fields[1]
+      })
+    } catch (e) {
+      continue
+    }
+  }
+  return filtered
 }
 
 const submitToOverlay = async (tx, config) => {
@@ -71,53 +124,22 @@ const getProtectedKey = async (key, config) => {
  * Gets a value from the store.
  *
  * @param {String} key The key for the value to get
+ * @param {String} defaultValue The value returned when no token is found
+ * @param {Object} config The config object (see the config section)
  *
  * @returns {Promise<String>} The value from the store
  */
 const get = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, config)
-  const utxos = await findFromOverlay(protectedKey, config)
+  const utxos = await findFromOverlay(protectedKey, key, config)
   if (utxos.length === 0) {
     if (defaultValue !== undefined) {
       return defaultValue
     }
     return undefined
   }
-  let correctKey
-  if (config.viewpoint === 'localToSelf') {
-    correctKey = await SDK.getPublicKey({
-      protocolID: config.protocolID,
-      keyID: key,
-      counterparty: config.counterparty,
-      forSelf: true
-    })
-  } else {
-    correctKey = getPaymentAddress({
-      senderPrivateKey: '0000000000000000000000000000000000000000000000000000000000000001',
-      recipientPublicKey: config.viewpoint,
-      invoiceNumber: computeInvoiceNumber(config.protocolID, key),
-      returnType: 'publicKey'
-    })
-  }
-  for (const utxo of utxos) {
-    try {
-      const decoded = await pushdrop.decode({
-        script: utxo.outputScript,
-        fieldFormat: 'utf8'
-      })
-      if (decoded.lockingPublicKey !== correctKey) {
-        throw new Error('Token is not from correct key.')
-      }
-      return decoded.fields[1]
-    } catch (e) {
-      continue
-    }
-  }
-  if (defaultValue !== undefined) {
-    return defaultValue
-  }
-  return undefined
+  return utxos[0].value
 }
 
 /**
@@ -125,6 +147,7 @@ const get = async (key, defaultValue = undefined, config = {}) => {
  *
  * @param {String} key The key for the value to set
  * @param {String} value The value to store
+ * @param {Object} config The config object (see the config section)
  *
  * @returns {Promise} Promise that resolves when the value has been stored
  */
@@ -134,15 +157,10 @@ const set = async (key, value, config = {}) => {
     throw new Error('moveFromSelf and moveToSelf cannot both be true at the same time.')
   }
   const protectedKey = await getProtectedKey(key, config)
-  const existingTokens = await findFromOverlay(protectedKey, config)
+  const existingTokens = await findFromOverlay(protectedKey, key, config)
 
   let action
   if (existingTokens.length > 0) {
-    const decoded = await pushdrop.decode({
-      script: existingTokens[0].outputScript,
-      fieldFormat: 'utf8'
-    })
-
     const kvstoreToken = existingTokens[0]
     const unlockingScript = await pushdrop.redeem({
       prevTxId: kvstoreToken.txid,
@@ -213,13 +231,14 @@ const set = async (key, value, config = {}) => {
  * Deletes a value from the store.
  *
  * @param {String} key The key for the value to remove
+ * @param {Object} config The config object (see the config section)
  *
  * @returns {Promise} Promise that resolves when the value has been deleted
  */
 const remove = async (key, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, config)
-  const existingTokens = await findFromOverlay(protectedKey, config)
+  const existingTokens = await findFromOverlay(protectedKey, key, config)
   if (existingTokens.length === 0) {
     throw new Error('The item did not exist, no item was deleted.')
   }

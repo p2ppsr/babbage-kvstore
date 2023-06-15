@@ -54,8 +54,8 @@ Gets a value from the store.
 #### Parameters
 
 *   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to get
-*   `defaultValue`   (optional, default `undefined`)
-*   `config`   (optional, default `{}`)
+*   `defaultValue` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value returned when no token is found (optional, default `undefined`)
+*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** The value from the store
 
@@ -67,7 +67,7 @@ Sets a new value in the store, overwriting any existing value.
 
 *   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to set
 *   `value` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value to store
-*   `config`   (optional, default `{}`)
+*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** Promise that resolves when the value has been stored
 
@@ -78,7 +78,7 @@ Deletes a value from the store.
 #### Parameters
 
 *   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to remove
-*   `config`   (optional, default `{}`)
+*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** Promise that resolves when the value has been deleted
 
