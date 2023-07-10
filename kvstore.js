@@ -29,7 +29,8 @@ const findFromOverlay = async (protectedKey, key, config) => {
       provider: 'kvstore',
       query: {
         protectedKey: Buffer.from(protectedKey).toString('base64')
-      }
+      },
+      history: 'all'
     })
   })
   const utxos = await result.json()
@@ -158,6 +159,29 @@ const get = async (key, defaultValue = undefined, config = {}) => {
 }
 
 /**
+ * Gets a value from the store with history of token
+ *
+ * @param {String} key The key for the value to get
+ * @param {String} defaultValue The value returned when no token is found
+ * @param {object} config The config object (see the config section)
+ *
+ * @returns {Promise<object>} The value from the store and history of the token
+ */
+const getWithHistory = async (key, defaultValue = undefined, config = {}) => {
+  config = { ...defaultConfig, ...config }
+  const protectedKey = await getProtectedKey(key, 'searching', config)
+  const utxos = await findFromOverlay(protectedKey, key, config)
+  if (utxos.length === 0) {
+    if (defaultValue !== undefined) {
+      return defaultValue
+    }
+    return undefined
+  }
+  // Return the current value as well as the previous UTXOs and values
+  return utxos[0]
+}
+
+/**
  * Sets a new value in the store, overwriting any existing value.
  *
  * @param {String} key The key for the value to set
@@ -178,7 +202,8 @@ const set = async (key, value, config = {}) => {
 
   let action
   if (existingTokens.length > 0) {
-    const kvstoreToken = existingTokens[0]
+    // Get the latest unspent token in case spent outputs are returned
+    const kvstoreToken = existingTokens[existingTokens.length - 1]
     const unlockingScript = await pushdrop.redeem({
       prevTxId: kvstoreToken.txid,
       outputIndex: kvstoreToken.vout,
@@ -300,4 +325,4 @@ const remove = async (key, config = {}) => {
   return await submitToOverlay(action, config)
 }
 
-module.exports = { get, set, remove }
+module.exports = { get, getWithHistory, set, remove }
