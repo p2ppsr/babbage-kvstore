@@ -18,7 +18,7 @@ const defaultConfig = {
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
 
-const findFromOverlay = async (protectedKey, key, config) => {
+const findFromOverlay = async (protectedKey, key, config, history) => {
   const client = new Authrite(config.authriteConfig)
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -30,7 +30,7 @@ const findFromOverlay = async (protectedKey, key, config) => {
       query: {
         protectedKey: Buffer.from(protectedKey).toString('base64')
       },
-      history: 'all'
+      history
     })
   })
   const utxos = await result.json()
@@ -170,7 +170,7 @@ const get = async (key, defaultValue = undefined, config = {}) => {
 const getWithHistory = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
-  const utxos = await findFromOverlay(protectedKey, key, config)
+  const utxos = await findFromOverlay(protectedKey, key, config, 'all')
   if (utxos.length === 0) {
     if (defaultValue !== undefined) {
       return defaultValue
