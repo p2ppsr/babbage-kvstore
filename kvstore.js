@@ -18,7 +18,7 @@ const defaultConfig = {
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
 
-const findFromOverlay = async (protectedKey, key, config, history) => {
+const findFromOverlay = async (protectedKey, key, config) => {
   const client = new Authrite(config.authriteConfig)
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -29,11 +29,10 @@ const findFromOverlay = async (protectedKey, key, config, history) => {
       provider: 'kvstore',
       query: {
         protectedKey: Buffer.from(protectedKey).toString('base64')
-      },
-      history
+      }
     })
   })
-  const utxos = await result.json()
+  const envelope = await result.json()
   let correctOwnerKey, correctSigningKey
   if (config.viewpoint === 'localToSelf') {
     correctOwnerKey = await SDK.getPublicKey({
@@ -57,11 +56,14 @@ const findFromOverlay = async (protectedKey, key, config, history) => {
     })
     correctSigningKey = correctOwnerKey
   }
-  const filtered = []
-  for (const utxo of utxos) {
+  const valueHistory = []
+  // Current UTXO transaction
+  const tx = new bsv.Transaction(envelope[0].rawTx) // There shouldn't be more than one result, right?
+  // Decode the current value from the output which should have a vout of 0
+  for (const output of tx.outputs) {
     try {
       const decoded = await pushdrop.decode({
-        script: utxo.outputScript,
+        script: output.script.toHex(),
         fieldFormat: 'buffer'
       })
       if (decoded.lockingPublicKey !== correctOwnerKey) {
@@ -80,15 +82,51 @@ const findFromOverlay = async (protectedKey, key, config, history) => {
         e.code = 'ERR_INVALID_SIGNATURE'
         throw e
       }
-      filtered.push({
-        ...utxo,
-        value: decoded.fields[1].toString('utf8')
-      })
+      valueHistory.push(decoded.fields[1].toString('utf8'))
     } catch (e) {
       continue
     }
   }
-  return filtered
+
+  // For the current utxo, iterate through each input and decode the outputScript on each tx
+  const inputs = envelope[0].inputs
+  let currentInput = inputs
+  while (Object.keys(currentInput) !== [] && typeof currentInput !== 'string') {
+    try {
+      const data = Object.values(currentInput)[0]
+      // Parse the transaction for the current input
+      const tx = new bsv.Transaction(data.rawTx)
+      // Decode the data from output 0
+      const decoded = await pushdrop.decode({
+        script: tx.outputs[0].script.toHex(), // always zero?
+        fieldFormat: 'buffer'
+      })
+      if (decoded.lockingPublicKey !== correctOwnerKey) {
+        const e = new Error('Token is not from correct key')
+        e.code = 'ERR_INVALID_TOKEN'
+        throw e
+      }
+      // Use ECDSA to verify signature
+      const hasValidSignature = bsv.crypto.ECDSA.verify(
+        bsv.crypto.Hash.sha256(Buffer.concat(decoded.fields)),
+        bsv.crypto.Signature.fromString(decoded.signature),
+        bsv.PublicKey.fromString(correctSigningKey)
+      )
+      if (!hasValidSignature) {
+        const e = new Error('Invalid Signature')
+        e.code = 'ERR_INVALID_SIGNATURE'
+        throw e
+      }
+      valueHistory.push(decoded.fields[1].toString('utf8'))
+      currentInput = Object.values(currentInput)[0].inputs
+    } catch (e) {
+      continue
+    }
+  }
+  return {
+    envelope,
+    valueHistory
+  }
 }
 
 const submitToOverlay = async (tx, config) => {
@@ -170,15 +208,15 @@ const get = async (key, defaultValue = undefined, config = {}) => {
 const getWithHistory = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
-  const utxos = await findFromOverlay(protectedKey, key, config, 'all')
-  if (utxos.length === 0) {
+  const results = await findFromOverlay(protectedKey, key, config, 'all')
+  if (!results) {
     if (defaultValue !== undefined) {
       return defaultValue
     }
     return undefined
   }
-  // Return the current value as well as the previous UTXOs and values
-  return utxos[0]
+  // Return the utxo value history and SPV envelope information
+  return results
 }
 
 /**
