@@ -18,7 +18,7 @@ const defaultConfig = {
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
 
-const findFromOverlay = async (protectedKey, key, config) => {
+const findFromOverlay = async (protectedKey, key, config, history = false) => {
   const client = new Authrite(config.authriteConfig)
   const result = await client.request(`${config.confederacyHost}/lookup`, {
     method: 'post',
@@ -28,7 +28,8 @@ const findFromOverlay = async (protectedKey, key, config) => {
     body: JSON.stringify({
       provider: 'kvstore',
       query: {
-        protectedKey: Buffer.from(protectedKey).toString('base64')
+        protectedKey: Buffer.from(protectedKey).toString('base64'),
+        history
       }
     })
   })
@@ -56,6 +57,10 @@ const findFromOverlay = async (protectedKey, key, config) => {
     })
     correctSigningKey = correctOwnerKey
   }
+
+  // Check if this is a set and no previous outputs were found
+  if (envelope.length === 0) return []
+
   const valueHistory = []
   // Current UTXO transaction
   const tx = new bsv.Transaction(envelope[0].rawTx) // There shouldn't be more than one result, right?
@@ -82,6 +87,7 @@ const findFromOverlay = async (protectedKey, key, config) => {
         e.code = 'ERR_INVALID_SIGNATURE'
         throw e
       }
+      // Add the current value of the utxo to the top of the stack
       valueHistory.push(decoded.fields[1].toString('utf8'))
     } catch (e) {
       continue
@@ -117,6 +123,7 @@ const findFromOverlay = async (protectedKey, key, config) => {
         e.code = 'ERR_INVALID_SIGNATURE'
         throw e
       }
+      // Add the value of the current decoded data to the history array
       valueHistory.push(decoded.fields[1].toString('utf8'))
       currentInput = Object.values(currentInput)[0].inputs
     } catch (e) {
@@ -186,14 +193,14 @@ const getProtectedKey = async (key, context = 'searching', config) => {
 const get = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
-  const utxos = await findFromOverlay(protectedKey, key, config)
-  if (utxos.length === 0) {
+  const results = await findFromOverlay(protectedKey, key, config)
+  if (results.length === 0) {
     if (defaultValue !== undefined) {
       return defaultValue
     }
     return undefined
   }
-  return utxos[0].value
+  return results
 }
 
 /**
@@ -208,7 +215,7 @@ const get = async (key, defaultValue = undefined, config = {}) => {
 const getWithHistory = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
-  const results = await findFromOverlay(protectedKey, key, config, 'all')
+  const results = await findFromOverlay(protectedKey, key, config, true)
   if (!results) {
     if (defaultValue !== undefined) {
       return defaultValue
@@ -239,14 +246,15 @@ const set = async (key, value, config = {}) => {
   const existingTokens = await findFromOverlay(protectedKey, key, config)
 
   let action
-  if (existingTokens.length > 0) {
+  if (existingTokens.envelope !== undefined && existingTokens.envelope.length > 0) {
     // Get the latest unspent token in case spent outputs are returned
-    const kvstoreToken = existingTokens[existingTokens.length - 1]
+    const kvstoreToken = new bsv.Transaction(existingTokens.envelope[0].rawTx) // output 0 always...?
+    const envelope = existingTokens.envelope[0]
     const unlockingScript = await pushdrop.redeem({
-      prevTxId: kvstoreToken.txid,
-      outputIndex: kvstoreToken.vout,
-      lockingScript: kvstoreToken.outputScript,
-      outputAmount: kvstoreToken.satoshis,
+      prevTxId: envelope.txid,
+      outputIndex: 0,
+      lockingScript: kvstoreToken.outputs[0].script.toHex(),
+      outputAmount: kvstoreToken.outputs[0].satoshis,
       protocolID: config.protocolID,
       keyID: key,
       counterparty: config.sendToCounterparty ? 'self' : config.counterparty
@@ -255,19 +263,19 @@ const set = async (key, value, config = {}) => {
     action = await SDK.createAction({
       description: `Update the value for ${key}`,
       inputs: {
-        [kvstoreToken.txid]: {
-          ...kvstoreToken,
-          inputs: typeof kvstoreToken.inputs === 'string'
-            ? JSON.parse(kvstoreToken.inputs)
-            : kvstoreToken.inputs,
-          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
-            ? JSON.parse(kvstoreToken.mapiResponses)
-            : kvstoreToken.mapiResponses,
-          proof: typeof kvstoreToken.proof === 'string'
-            ? JSON.parse(kvstoreToken.proof)
-            : kvstoreToken.proof,
+        [envelope.txid]: {
+          ...envelope,
+          inputs: typeof envelope.inputs === 'string'
+            ? JSON.parse(envelope.inputs)
+            : envelope.inputs,
+          mapiResponses: typeof envelope.mapiResponses === 'string'
+            ? JSON.parse(envelope.mapiResponses)
+            : envelope.mapiResponses,
+          proof: typeof envelope.proof === 'string'
+            ? JSON.parse(envelope.proof)
+            : envelope.proof,
           outputsToRedeem: [{
-            index: kvstoreToken.vout,
+            index: 0,
             unlockingScript
           }]
         }
@@ -324,17 +332,20 @@ const remove = async (key, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
-  if (existingTokens.length === 0) {
+  if (existingTokens.envelope === undefined && existingTokens.envelope.length === 0) {
     const e = new Error('The item did not exist, no item was deleted.')
     e.code = 'ERR_NO_TOKEN'
     throw e
   }
-  const kvstoreToken = existingTokens[0]
+  // Get the latest unspent token in case spent outputs are returned
+  const kvstoreToken = new bsv.Transaction(existingTokens.envelope[0].rawTx) // output 0 always...?
+  const envelope = existingTokens.envelope[0]
+
   const unlockingScript = await pushdrop.redeem({
-    prevTxId: kvstoreToken.txid,
-    outputIndex: kvstoreToken.vout,
-    lockingScript: kvstoreToken.outputScript,
-    outputAmount: kvstoreToken.satoshis,
+    prevTxId: envelope.txid,
+    outputIndex: 0, // ?
+    lockingScript: kvstoreToken.outputs[0].script.toHex(),
+    outputAmount: kvstoreToken.outputs[0].satoshis,
     protocolID: config.protocolID,
     keyID: key,
     counterparty: config.counterparty
@@ -342,19 +353,19 @@ const remove = async (key, config = {}) => {
   const action = await SDK.createAction({
     description: `Delete the value for ${key}`,
     inputs: {
-      [kvstoreToken.txid]: {
-        ...kvstoreToken,
-        inputs: typeof kvstoreToken.inputs === 'string'
-          ? JSON.parse(kvstoreToken.inputs)
-          : kvstoreToken.inputs,
-        mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
-          ? JSON.parse(kvstoreToken.mapiResponses)
-          : kvstoreToken.mapiResponses,
-        proof: typeof kvstoreToken.proof === 'string'
-          ? JSON.parse(kvstoreToken.proof)
-          : kvstoreToken.proof,
+      [envelope.txid]: {
+        ...envelope,
+        inputs: typeof envelope.inputs === 'string'
+          ? JSON.parse(envelope.inputs)
+          : envelope.inputs,
+        mapiResponses: typeof envelope.mapiResponses === 'string'
+          ? JSON.parse(envelope.mapiResponses)
+          : envelope.mapiResponses,
+        proof: typeof envelope.proof === 'string'
+          ? JSON.parse(envelope.proof)
+          : envelope.proof,
         outputsToRedeem: [{
-          index: kvstoreToken.vout,
+          index: 0, // ?
           unlockingScript
         }]
       }
