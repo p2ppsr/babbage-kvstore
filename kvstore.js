@@ -62,107 +62,20 @@ const findFromOverlay = async (protectedKey, key, config, history = false) => {
   // Check if this is a set and no previous outputs were found
   if (!envelope) return
 
-  const historian = new Historian(correctOwnerKey, correctSigningKey)
+  // Historian package with mock validator function to apply a filter
+  const historian = new Historian(correctOwnerKey, correctSigningKey, (value) => {
+    if (value === 'val1') { return true }
+    return false
+  })
 
-  // For the current utxo, iterate through each input and decode the outputScript on each tx
-  // TODO:
-  // for each input of
-  // Recursively - helper function
-  // TODO: Create history decider function to figure out which inputs to include and which are actual pushdrop inputs
-  // THis can later be pulled out into a package
-  // let valueHistory = await decodeTokenValue(envelope, correctOwnerKey, correctSigningKey)
-  const currentValue = await historian.decodeTokenValue(envelope, correctOwnerKey, correctSigningKey)
-  const valueHistory = [currentValue]
-  const otherHistory = await historian.interpret(envelope, 0, correctOwnerKey, correctSigningKey)
-  if (otherHistory !== undefined) {
-    valueHistory.push(...otherHistory)
-  }
+  // For the current utxo, iterate through each input and decode the outputScript on each output recursively
+  const valueHistory = await historian.interpret(envelope, 0, correctOwnerKey, correctSigningKey)
 
   return {
     envelope,
     valueHistory
   }
 }
-
-/**
-   * Structure of envelope
-   *
-   * envelope: {
-   *   inputs: {
-   *    txid: {
-   *      ...envelope data,
-   *      inputs: [...]
-   *      },
-   *    txid2: {...}
-   * }
-   * }
-   */
-
-/**
-   * TODO:
-   * baseCase -  no more inputs left, just parse the current input output script
-   * figure out inputs on the currentEnvelope, for each traverse into them
-   * maybe return all history, then filter. Or it could be done as each is looked at which might be more efficient.
-   */
-
-// TODO: Move to helper package  -  (Interpreter, Historian, Veto, Merklator)
-// const historySelector = async (currentEnvelope, currentDepth, correctOwnerKey, correctSigningKey) => {
-//   const shouldSelectInput = true // TODO: Add custom logic
-
-//   // Make sure the inputs are given as a string...?
-//   if (typeof currentEnvelope.inputs === 'string') {
-//     currentEnvelope.inputs = JSON.parse(currentEnvelope.inputs)
-//   }
-
-//   // If there are no more inputs for this branch, return no value history
-//   if (currentEnvelope.inputs === undefined || Object.keys(currentEnvelope.inputs).length === 0) {
-//     return []
-//   }
-
-//   let valueHistory = []
-//   if (currentEnvelope.inputs && typeof currentEnvelope.inputs === 'object') {
-//     for (const inputEnvelope of Object.values(currentEnvelope.inputs)) {
-//       const tokenValue = await decodeTokenValue(inputEnvelope, correctOwnerKey, correctSigningKey)
-//       if (tokenValue) {
-//         valueHistory.push(tokenValue)
-//       }
-//       const previousHistory = await historySelector(inputEnvelope, currentDepth + 1, correctOwnerKey, correctSigningKey)
-//       if (previousHistory && previousHistory.length > 0) {
-//         valueHistory = [...valueHistory, ...previousHistory]
-//       }
-//     }
-//   }
-
-//   return valueHistory.flat()
-// }
-
-// const decodeTokenValue = async (inputEnvelope, correctOwnerKey, correctSigningKey) => {
-//   try {
-//     // Decode the data from output 0
-//     const decoded = await pushdrop.decode({
-//       script: inputEnvelope.outputScript, // always zero?
-//       fieldFormat: 'buffer'
-//     })
-//     if (decoded.lockingPublicKey !== correctOwnerKey) {
-//       const e = new Error('Token is not from correct key')
-//       e.code = 'ERR_INVALID_TOKEN'
-//       throw e
-//     }
-//     // Use ECDSA to verify signature
-//     const hasValidSignature = bsv.crypto.ECDSA.verify(
-//       bsv.crypto.Hash.sha256(Buffer.concat(decoded.fields)),
-//       bsv.crypto.Signature.fromString(decoded.signature),
-//       bsv.PublicKey.fromString(correctSigningKey)
-//     )
-//     if (!hasValidSignature) {
-//       const e = new Error('Invalid Signature')
-//       e.code = 'ERR_INVALID_SIGNATURE'
-//       throw e
-//     }
-//     return decoded.fields[1].toString()
-//   } catch (error) {
-//   }
-// }
 
 const submitToOverlay = async (tx, config) => {
   const client = new Authrite(config.authriteConfig)

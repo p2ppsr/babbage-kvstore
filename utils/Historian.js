@@ -5,9 +5,14 @@ const pushdrop = require('pushdrop')
  * Interprets the history of a token BRC-8 envelope
  */
 class Historian {
-  constructor (correctOwnerKey, correctSigningKey) {
+  constructor (correctOwnerKey, correctSigningKey, validate) {
     this.correctOwnerKey = correctOwnerKey
     this.correctSigningKey = correctSigningKey
+    if (validate) {
+      this.validate = validate
+    } else {
+      this.validate = (value) => { return true }
+    }
   }
 
   async interpret (currentEnvelope, currentDepth) {
@@ -16,16 +21,25 @@ class Historian {
       currentEnvelope.inputs = JSON.parse(currentEnvelope.inputs)
     }
 
+    let valueHistory = []
+
+    // Handle the current value first
+    if (currentDepth === 0) {
+      const tokenValue = await this.decodeTokenValue(currentEnvelope)
+      if (tokenValue && this.isValid(tokenValue)) {
+        valueHistory.push(tokenValue)
+      }
+    }
+
     // If there are no more inputs for this branch, return no value history
     if (currentEnvelope.inputs === undefined || Object.keys(currentEnvelope.inputs).length === 0) {
       return []
     }
 
-    let valueHistory = []
     if (currentEnvelope.inputs && typeof currentEnvelope.inputs === 'object') {
       for (const inputEnvelope of Object.values(currentEnvelope.inputs)) {
         const tokenValue = await this.decodeTokenValue(inputEnvelope)
-        if (tokenValue) {
+        if (tokenValue && this.validate(tokenValue)) {
           valueHistory.push(tokenValue)
         }
         const previousHistory = await this.interpret(inputEnvelope, currentDepth + 1, this.correctOwnerKey, this.correctSigningKey)
@@ -35,6 +49,7 @@ class Historian {
       }
     }
 
+    // Return the history and apply a filter
     return valueHistory.flat()
   }
 
