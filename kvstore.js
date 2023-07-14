@@ -3,6 +3,7 @@ const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
 const { getPaymentAddress } = require('sendover')
 const bsv = require('babbage-bsv')
+const { Historian } = require('./utils/Historian')
 
 const defaultConfig = {
   confederacyHost: 'https://confederacy.babbage.systems',
@@ -33,7 +34,7 @@ const findFromOverlay = async (protectedKey, key, config, history = false) => {
       }
     })
   })
-  const envelope = await result.json()
+  const [envelope] = await result.json()
   let correctOwnerKey, correctSigningKey
   if (config.viewpoint === 'localToSelf') {
     correctOwnerKey = await SDK.getPublicKey({
@@ -59,82 +60,109 @@ const findFromOverlay = async (protectedKey, key, config, history = false) => {
   }
 
   // Check if this is a set and no previous outputs were found
-  if (envelope.length === 0) return []
+  if (!envelope) return
 
-  const valueHistory = []
-  // Current UTXO transaction
-  const tx = new bsv.Transaction(envelope[0].rawTx) // There shouldn't be more than one result, right?
-  // Decode the current value from the output which should have a vout of 0
-  for (const output of tx.outputs) {
-    try {
-      const decoded = await pushdrop.decode({
-        script: output.script.toHex(),
-        fieldFormat: 'buffer'
-      })
-      if (decoded.lockingPublicKey !== correctOwnerKey) {
-        const e = new Error('Token is not from correct key')
-        e.code = 'ERR_INVALID_TOKEN'
-        throw e
-      }
-      // Use ECDSA to verify signature
-      const hasValidSignature = bsv.crypto.ECDSA.verify(
-        bsv.crypto.Hash.sha256(Buffer.concat(decoded.fields)),
-        bsv.crypto.Signature.fromString(decoded.signature),
-        bsv.PublicKey.fromString(correctSigningKey)
-      )
-      if (!hasValidSignature) {
-        const e = new Error('Invalid Signature')
-        e.code = 'ERR_INVALID_SIGNATURE'
-        throw e
-      }
-      // Add the current value of the utxo to the top of the stack
-      valueHistory.push(decoded.fields[1].toString('utf8'))
-    } catch (e) {
-      continue
-    }
-  }
+  const historian = new Historian(correctOwnerKey, correctSigningKey)
 
   // For the current utxo, iterate through each input and decode the outputScript on each tx
-  const inputs = envelope[0].inputs
-  let currentInput = inputs
-  while (Object.keys(currentInput) !== [] && typeof currentInput !== 'string') {
-    try {
-      const data = Object.values(currentInput)[0]
-      // Parse the transaction for the current input
-      const tx = new bsv.Transaction(data.rawTx)
-      // Decode the data from output 0
-      const decoded = await pushdrop.decode({
-        script: tx.outputs[0].script.toHex(), // always zero?
-        fieldFormat: 'buffer'
-      })
-      if (decoded.lockingPublicKey !== correctOwnerKey) {
-        const e = new Error('Token is not from correct key')
-        e.code = 'ERR_INVALID_TOKEN'
-        throw e
-      }
-      // Use ECDSA to verify signature
-      const hasValidSignature = bsv.crypto.ECDSA.verify(
-        bsv.crypto.Hash.sha256(Buffer.concat(decoded.fields)),
-        bsv.crypto.Signature.fromString(decoded.signature),
-        bsv.PublicKey.fromString(correctSigningKey)
-      )
-      if (!hasValidSignature) {
-        const e = new Error('Invalid Signature')
-        e.code = 'ERR_INVALID_SIGNATURE'
-        throw e
-      }
-      // Add the value of the current decoded data to the history array
-      valueHistory.push(decoded.fields[1].toString('utf8'))
-      currentInput = Object.values(currentInput)[0].inputs
-    } catch (e) {
-      continue
-    }
+  // TODO:
+  // for each input of
+  // Recursively - helper function
+  // TODO: Create history decider function to figure out which inputs to include and which are actual pushdrop inputs
+  // THis can later be pulled out into a package
+  // let valueHistory = await decodeTokenValue(envelope, correctOwnerKey, correctSigningKey)
+  const currentValue = await historian.decodeTokenValue(envelope, correctOwnerKey, correctSigningKey)
+  const valueHistory = [currentValue]
+  const otherHistory = await historian.interpret(envelope, 0, correctOwnerKey, correctSigningKey)
+  if (otherHistory !== undefined) {
+    valueHistory.push(...otherHistory)
   }
+
   return {
     envelope,
     valueHistory
   }
 }
+
+/**
+   * Structure of envelope
+   *
+   * envelope: {
+   *   inputs: {
+   *    txid: {
+   *      ...envelope data,
+   *      inputs: [...]
+   *      },
+   *    txid2: {...}
+   * }
+   * }
+   */
+
+/**
+   * TODO:
+   * baseCase -  no more inputs left, just parse the current input output script
+   * figure out inputs on the currentEnvelope, for each traverse into them
+   * maybe return all history, then filter. Or it could be done as each is looked at which might be more efficient.
+   */
+
+// TODO: Move to helper package  -  (Interpreter, Historian, Veto, Merklator)
+// const historySelector = async (currentEnvelope, currentDepth, correctOwnerKey, correctSigningKey) => {
+//   const shouldSelectInput = true // TODO: Add custom logic
+
+//   // Make sure the inputs are given as a string...?
+//   if (typeof currentEnvelope.inputs === 'string') {
+//     currentEnvelope.inputs = JSON.parse(currentEnvelope.inputs)
+//   }
+
+//   // If there are no more inputs for this branch, return no value history
+//   if (currentEnvelope.inputs === undefined || Object.keys(currentEnvelope.inputs).length === 0) {
+//     return []
+//   }
+
+//   let valueHistory = []
+//   if (currentEnvelope.inputs && typeof currentEnvelope.inputs === 'object') {
+//     for (const inputEnvelope of Object.values(currentEnvelope.inputs)) {
+//       const tokenValue = await decodeTokenValue(inputEnvelope, correctOwnerKey, correctSigningKey)
+//       if (tokenValue) {
+//         valueHistory.push(tokenValue)
+//       }
+//       const previousHistory = await historySelector(inputEnvelope, currentDepth + 1, correctOwnerKey, correctSigningKey)
+//       if (previousHistory && previousHistory.length > 0) {
+//         valueHistory = [...valueHistory, ...previousHistory]
+//       }
+//     }
+//   }
+
+//   return valueHistory.flat()
+// }
+
+// const decodeTokenValue = async (inputEnvelope, correctOwnerKey, correctSigningKey) => {
+//   try {
+//     // Decode the data from output 0
+//     const decoded = await pushdrop.decode({
+//       script: inputEnvelope.outputScript, // always zero?
+//       fieldFormat: 'buffer'
+//     })
+//     if (decoded.lockingPublicKey !== correctOwnerKey) {
+//       const e = new Error('Token is not from correct key')
+//       e.code = 'ERR_INVALID_TOKEN'
+//       throw e
+//     }
+//     // Use ECDSA to verify signature
+//     const hasValidSignature = bsv.crypto.ECDSA.verify(
+//       bsv.crypto.Hash.sha256(Buffer.concat(decoded.fields)),
+//       bsv.crypto.Signature.fromString(decoded.signature),
+//       bsv.PublicKey.fromString(correctSigningKey)
+//     )
+//     if (!hasValidSignature) {
+//       const e = new Error('Invalid Signature')
+//       e.code = 'ERR_INVALID_SIGNATURE'
+//       throw e
+//     }
+//     return decoded.fields[1].toString()
+//   } catch (error) {
+//   }
+// }
 
 const submitToOverlay = async (tx, config) => {
   const client = new Authrite(config.authriteConfig)
@@ -242,19 +270,19 @@ const set = async (key, value, config = {}) => {
     e.code = 'ERR_NO_SEND_AND_RECEIVE_AT_SAME_TIME'
     throw e
   }
+  debugger
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
 
   let action
-  if (existingTokens.envelope !== undefined && existingTokens.envelope.length > 0) {
+  if (existingTokens && existingTokens.envelope !== undefined) {
     // Get the latest unspent token in case spent outputs are returned
-    const kvstoreToken = new bsv.Transaction(existingTokens.envelope[0].rawTx) // output 0 always...?
-    const envelope = existingTokens.envelope[0]
+    const kvstoreToken = existingTokens.envelope
     const unlockingScript = await pushdrop.redeem({
-      prevTxId: envelope.txid,
-      outputIndex: 0,
-      lockingScript: kvstoreToken.outputs[0].script.toHex(),
-      outputAmount: kvstoreToken.outputs[0].satoshis,
+      prevTxId: kvstoreToken.txid,
+      outputIndex: kvstoreToken.vout,
+      lockingScript: kvstoreToken.outputScript,
+      outputAmount: kvstoreToken.satoshis,
       protocolID: config.protocolID,
       keyID: key,
       counterparty: config.sendToCounterparty ? 'self' : config.counterparty
@@ -263,17 +291,17 @@ const set = async (key, value, config = {}) => {
     action = await SDK.createAction({
       description: `Update the value for ${key}`,
       inputs: {
-        [envelope.txid]: {
-          ...envelope,
-          inputs: typeof envelope.inputs === 'string'
-            ? JSON.parse(envelope.inputs)
-            : envelope.inputs,
-          mapiResponses: typeof envelope.mapiResponses === 'string'
-            ? JSON.parse(envelope.mapiResponses)
-            : envelope.mapiResponses,
-          proof: typeof envelope.proof === 'string'
-            ? JSON.parse(envelope.proof)
-            : envelope.proof,
+        [kvstoreToken.txid]: {
+          ...kvstoreToken,
+          inputs: typeof kvstoreToken.inputs === 'string'
+            ? JSON.parse(kvstoreToken.inputs)
+            : kvstoreToken.inputs,
+          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+            ? JSON.parse(kvstoreToken.mapiResponses)
+            : kvstoreToken.mapiResponses,
+          proof: typeof kvstoreToken.proof === 'string'
+            ? JSON.parse(kvstoreToken.proof)
+            : kvstoreToken.proof,
           outputsToRedeem: [{
             index: 0,
             unlockingScript
@@ -332,20 +360,19 @@ const remove = async (key, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
-  if (existingTokens.envelope === undefined && existingTokens.envelope.length === 0) {
+  if (existingTokens === undefined || (existingTokens.envelope === undefined && existingTokens.envelope.length === 0)) {
     const e = new Error('The item did not exist, no item was deleted.')
     e.code = 'ERR_NO_TOKEN'
     throw e
   }
   // Get the latest unspent token in case spent outputs are returned
-  const kvstoreToken = new bsv.Transaction(existingTokens.envelope[0].rawTx) // output 0 always...?
-  const envelope = existingTokens.envelope[0]
+  const kvstoreToken = existingTokens.envelope
 
   const unlockingScript = await pushdrop.redeem({
-    prevTxId: envelope.txid,
-    outputIndex: 0, // ?
-    lockingScript: kvstoreToken.outputs[0].script.toHex(),
-    outputAmount: kvstoreToken.outputs[0].satoshis,
+    prevTxId: kvstoreToken.txid,
+    outputIndex: kvstoreToken.vout,
+    lockingScript: kvstoreToken.outputScript,
+    outputAmount: kvstoreToken.satoshis,
     protocolID: config.protocolID,
     keyID: key,
     counterparty: config.counterparty
@@ -353,17 +380,17 @@ const remove = async (key, config = {}) => {
   const action = await SDK.createAction({
     description: `Delete the value for ${key}`,
     inputs: {
-      [envelope.txid]: {
-        ...envelope,
-        inputs: typeof envelope.inputs === 'string'
-          ? JSON.parse(envelope.inputs)
-          : envelope.inputs,
-        mapiResponses: typeof envelope.mapiResponses === 'string'
-          ? JSON.parse(envelope.mapiResponses)
-          : envelope.mapiResponses,
-        proof: typeof envelope.proof === 'string'
-          ? JSON.parse(envelope.proof)
-          : envelope.proof,
+      [kvstoreToken.txid]: {
+        ...kvstoreToken,
+        inputs: typeof kvstoreToken.inputs === 'string'
+          ? JSON.parse(kvstoreToken.inputs)
+          : kvstoreToken.inputs,
+        mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+          ? JSON.parse(kvstoreToken.mapiResponses)
+          : kvstoreToken.mapiResponses,
+        proof: typeof kvstoreToken.proof === 'string'
+          ? JSON.parse(kvstoreToken.proof)
+          : kvstoreToken.proof,
         outputsToRedeem: [{
           index: 0, // ?
           unlockingScript
