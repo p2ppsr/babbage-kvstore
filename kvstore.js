@@ -63,10 +63,7 @@ const findFromOverlay = async (protectedKey, key, config, history = false) => {
   if (!envelope) return
 
   // Historian package with mock validator function to apply a filter
-  const historian = new Historian(correctOwnerKey, correctSigningKey, (value) => {
-    if (value === 'val1') { return true }
-    return false
-  })
+  const historian = new Historian(correctOwnerKey, correctSigningKey)
 
   // For the current utxo, iterate through each input and decode the outputScript on each output recursively
   const valueHistory = await historian.interpret(envelope, 0, correctOwnerKey, correctSigningKey)
@@ -135,7 +132,7 @@ const get = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const results = await findFromOverlay(protectedKey, key, config)
-  if (results.length === 0) {
+  if (results === undefined || results.envelope === undefined) {
     if (defaultValue !== undefined) {
       return defaultValue
     }
@@ -157,7 +154,7 @@ const getWithHistory = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const results = await findFromOverlay(protectedKey, key, config, true)
-  if (!results) {
+  if (results === undefined || results.envelope === undefined) {
     if (defaultValue !== undefined) {
       return defaultValue
     }
@@ -216,7 +213,7 @@ const set = async (key, value, config = {}) => {
             ? JSON.parse(kvstoreToken.proof)
             : kvstoreToken.proof,
           outputsToRedeem: [{
-            index: 0,
+            index: kvstoreToken.vout,
             unlockingScript
           }]
         }
@@ -305,7 +302,7 @@ const remove = async (key, config = {}) => {
           ? JSON.parse(kvstoreToken.proof)
           : kvstoreToken.proof,
         outputsToRedeem: [{
-          index: 0, // ?
+          index: kvstoreToken.vout,
           unlockingScript
         }]
       }
