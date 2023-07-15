@@ -3,7 +3,7 @@ const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
 const { getPaymentAddress } = require('sendover')
 const bsv = require('babbage-bsv')
-const { Historian } = require('./utils/Historian')
+const { Historian } = require('@cwi/historian')
 
 const defaultConfig = {
   confederacyHost: 'https://confederacy.babbage.systems',
@@ -183,7 +183,7 @@ const set = async (key, value, config = {}) => {
     e.code = 'ERR_NO_SEND_AND_RECEIVE_AT_SAME_TIME'
     throw e
   }
-  debugger
+
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const existingTokens = await findFromOverlay(protectedKey, key, config)
 
