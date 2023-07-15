@@ -3,7 +3,7 @@ const SDK = require('@babbage/sdk')
 const pushdrop = require('pushdrop')
 const { getPaymentAddress } = require('sendover')
 const bsv = require('babbage-bsv')
-const { Historian } = require('@cwi/historian')
+const { Historian } = require('babbage-historian')
 
 const defaultConfig = {
   confederacyHost: 'https://confederacy.babbage.systems',
