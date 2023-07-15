@@ -68,6 +68,13 @@ const findFromOverlay = async (protectedKey, key, config, history = false) => {
   // For the current utxo, iterate through each input and decode the outputScript on each output recursively
   const valueHistory = await historian.interpret(envelope, 0, correctOwnerKey, correctSigningKey)
 
+  // If history is requested, an array will be returned
+  if (history === false) {
+    return {
+      envelope,
+      value: valueHistory ? valueHistory[0] : undefined
+    }
+  }
   return {
     envelope,
     valueHistory
@@ -132,6 +139,8 @@ const get = async (key, defaultValue = undefined, config = {}) => {
   config = { ...defaultConfig, ...config }
   const protectedKey = await getProtectedKey(key, 'searching', config)
   const results = await findFromOverlay(protectedKey, key, config)
+
+  // Make sure valid results were returned
   if (results === undefined || results.envelope === undefined) {
     if (defaultValue !== undefined) {
       return defaultValue
