@@ -29,7 +29,7 @@
   "homepage": "https://github.com/p2ppsr/babbage-kvstore#readme",
   "dependencies": {
     "@babbage/sdk": "^0.4.25",
-    "@cwi/historian": "^0.1.0",
+    "@cwi/historian": "^0.1.1",
     "authrite-js": "^0.2.15",
     "babbage-bsv": "^0.1.1",
     "pushdrop": "^0.1.20",
