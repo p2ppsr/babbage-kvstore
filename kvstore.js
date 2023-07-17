@@ -147,7 +147,7 @@ const get = async (key, defaultValue = undefined, config = {}) => {
     }
     return undefined
   }
-  return results
+  return results.value
 }
 
 /**
