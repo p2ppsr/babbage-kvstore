@@ -42,10 +42,12 @@ Name               | Description               | Default Value
 
 *   [get](#get)
     *   [Parameters](#parameters)
-*   [set](#set)
+*   [getWithHistory](#getwithhistory)
     *   [Parameters](#parameters-1)
-*   [remove](#remove)
+*   [set](#set)
     *   [Parameters](#parameters-2)
+*   [remove](#remove)
+    *   [Parameters](#parameters-3)
 
 ### get
 
@@ -58,6 +60,18 @@ Gets a value from the store.
 *   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** The value from the store
+
+### getWithHistory
+
+Gets a value from the store with history of token
+
+#### Parameters
+
+*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to get
+*   `defaultValue` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value returned when no token is found (optional, default `undefined`)
+*   `config` **[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
+
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)>** The value from the store and history of the token
 
 ### set
 
