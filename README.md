@@ -1,29 +1,78 @@
-# babbage-kvstore
+# Babbage-KVStore
 
-Set and get keys and Values©
+A flexible and decentralized Key-Value storage and retrieval system, designed and engineered around the feature-rich and versatile Bitcoin SV (BSV).
 
-## Overview
+[![npm version](https://badge.fury.io/js/babbage-kvstore.svg)](https://badge.fury.io/js/babbage-kvstore)
 
-KVStore is a simple, un-permissioned key-value storage and retrieval system that interfaces with your Babbage identity.
+## Table Of Contents
 
-## Examples
+*   [Introduction](#introduction)
+*   [Installation](#installation)
+*   [Usage](#usage)
+    *   [Setting and Getting values](#setting-and-getting-values)
+    *   [Removing a Value](#removing-a-value)
+    *   [Retrieving Previous Values](#retrieving-previous-values)
+*   [Configuration](#configuration)
+*   [Applications and Use Cases](#applications-and-use-cases)
+*   [API](#api)
+*   [License](#license)
 
-```js
-import { get, set } from 'babbage-kvstore'
+## Introduction
 
-// Set a value
-set('name', 'Bob')
+Babbage KVStore provides robust key-value storage functionality for your applications that leverages the power of Bitcoin SV's blockchain technology. By treating Bitcoin transactions (specifically UTXOs or Unspent Transaction Outputs) as your value store, you can create highly-distributed and verifiably-secure data storage for your application.
 
-// Retrieve a value
-get('name') // => 'Bob'
+## Installation
+
+Simply use npm to include Babbage KVStore in your project:
+
+```sh
+npm install babbage-kvstore
 ```
 
-## The Config Object
+## Usage
+
+### Setting and Getting values
+
+You can easily set up and utilize a key-value (KV) structure with Babbage. The `set` method takes in a key and a value, which are both strings. The `get` method retrieves the value associated with a key. Here is an example:
+
+```js
+const { get, set } = require('babbage-kvstore');
+
+// Set a value
+set('Hello', 'World');
+
+// Retrieve a value
+console.log(get('Hello')); // Outputs: 'World'
+```
+
+### Removing a Value
+
+The `remove` method is used to delete a value in your KV store. All you need is the key:
+
+```js
+const { remove } = require('babbage-kvstore');
+
+// Remove a value
+remove('Hello');
+```
+
+### Retrieving Previous Values
+
+`getWithHistory` lets you view previous versions of a value, allowing for an auditable log. This can be very powerful in several auditing and data tracking scenarios:
+
+```js
+const { getWithHistory } = require('babbage-kvstore');
+
+// Retrieve a value with history
+console.log(getWithHistory('Hello')); // Outputs: entire history of 'Hello'
+```
+
+## Configuration
 
 None of these values are required, but you can use them to customize and greatly extend the behavior of KVStore.
 
 Name               | Description               | Default Value
-\-------------------|---------------------------|---------------------
+-------------------|---------------------------|---------------------
 `confederacyHost`  | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
 `topics`           | Overlay network node topics where UTXOs are stored and retrieved | `['kvstore']`
 `protocolID`       | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
@@ -33,6 +82,19 @@ Name               | Description               | Default Value
 `receiveFromCounterparty`       | Move the token sent from the counterparty to self | `false`
 `sendToCounterparty`     | Move the token owned by self to the counterparty | `false`
 `viewpoint`        | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
+
+## Applications and Use Cases
+
+Due to its distributed, secure, and robust nature, Babbage KVStore can be used in various scenarios. A few key examples include:
+
+*   Decentralized applications:
+    *   Enhanced user security
+    *   Non-fungible tokens (NFTs)
+    *   On-chain social media
+    *   Data provenance tracking
+*   Auditing systems: With the use of the `getWithHistory` function, you can implement auditable logging and tracking systems.
+*   Secure system settings: Store secure system environment settings.
+*   Gaming: Keep track of game states and history.
 
 ## API
 
@@ -98,4 +160,4 @@ Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/
 
 ## License
 
-The license for the code in this repository is the Open BSV License
+The license for the code in this repository is the Open BSV License.
