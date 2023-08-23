@@ -71,17 +71,20 @@ console.log(getWithHistory('Hello')); // Outputs: entire history of 'Hello'
 
 None of these values are required, but you can use them to customize and greatly extend the behavior of KVStore.
 
-Name               | Description               | Default Value
--------------------|---------------------------|---------------------
-`confederacyHost`  | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
-`topics`           | Overlay network node topics where UTXOs are stored and retrieved | `['kvstore']`
-`protocolID`       | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
-`tokenAmount`      | Sets the number of satoshis in each KVStore UTXO | `1000`
-`authriteConfig`   | Parameters used to construct the Authrite client used to communicate with the overlay network node | `undefined`
-`counterparty`     | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
-`receiveFromCounterparty`       | Move the token sent from the counterparty to self | `false`
-`sendToCounterparty`     | Move the token owned by self to the counterparty | `false`
-`viewpoint`        | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
+Name                  | Description               | Default Value
+----------------------|---------------------------|---------------------
+`actionDescription`   | Description for the Action that sets a value | `Set a value for (key)`
+`outputDescription`   | Description for the transaction output (line item) that represents a new value | none
+`spendingDescription` | Description for the consumption of a previous value | none
+`confederacyHost`     | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
+`topics`              | Overlay network node topics where UTXOs are stored and retrieved | `['kvstore']`
+`protocolID`          | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
+`tokenAmount`         | Sets the number of satoshis in each KVStore UTXO | `1000`
+`authriteConfig`      | Parameters used to construct the Authrite client used to communicate with the overlay network node | `undefined`
+`counterparty`        | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
+`receiveFromCounterparty` | Move the token sent from the counterparty to self | `false`
+`sendToCounterparty`      | Move the token owned by self to the counterparty | `false`
+`viewpoint`               | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
 
 ## Applications and Use Cases
 

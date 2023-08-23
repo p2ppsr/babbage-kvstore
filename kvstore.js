@@ -208,7 +208,7 @@ const set = async (key, value, config = {}) => {
     })
 
     action = await SDK.createAction({
-      description: `Update the value for ${key}`,
+      description: config.actionDescription || `Update the value for ${key}`,
       inputs: {
         [kvstoreToken.txid]: {
           ...kvstoreToken,
@@ -223,7 +223,8 @@ const set = async (key, value, config = {}) => {
             : kvstoreToken.proof,
           outputsToRedeem: [{
             index: kvstoreToken.vout,
-            unlockingScript
+            unlockingScript,
+            spendingDescription: config.spendingDescription
           }]
         }
       },
@@ -238,7 +239,8 @@ const set = async (key, value, config = {}) => {
           keyID: key,
           counterparty: config.receiveFromCounterparty ? 'self' : config.counterparty,
           counterpartyCanVerifyMyOwnership: config.viewpoint !== 'localToSelf'
-        })
+        }),
+        description: config.outputDescription
       }]
     })
   } else {
@@ -248,7 +250,7 @@ const set = async (key, value, config = {}) => {
       throw e
     }
     action = await SDK.createAction({
-      description: `Set a value for ${key}`,
+      description: config.actionDescription || `Set a value for ${key}`,
       outputs: [{
         satoshis: config.tokenAmount,
         script: await pushdrop.create({
@@ -260,7 +262,8 @@ const set = async (key, value, config = {}) => {
           keyID: key,
           counterparty: config.receiveFromCounterparty ? 'self' : config.counterparty,
           ownedByCreator: config.viewpoint !== 'localToSelf'
-        })
+        }),
+        description: config.outputDescription
       }]
     })
   }
@@ -312,7 +315,8 @@ const remove = async (key, config = {}) => {
           : kvstoreToken.proof,
         outputsToRedeem: [{
           index: kvstoreToken.vout,
-          unlockingScript
+          unlockingScript,
+          spendingDescription: config.spendingDescription
         }]
       }
     }
