@@ -32,7 +32,7 @@
     "authrite-js": "^0.2.15",
     "babbage-bsv": "^0.1.1",
     "babbage-historian": "^0.1.2",
-    "pushdrop": "^0.1.20",
+    "pushdrop": "^0.1.22",
     "sendover": "^1.1.8"
   },
   "devDependencies": {
