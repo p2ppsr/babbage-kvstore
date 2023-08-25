@@ -85,6 +85,8 @@ Name                  | Description               | Default Value
 `receiveFromCounterparty` | Move the token sent from the counterparty to self | `false`
 `sendToCounterparty`      | Move the token owned by self to the counterparty | `false`
 `viewpoint`               | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
+`doubleSpendMaxAttempts` | The max number of times it should reattempt an action if a double spend error is detected. | 5
+`attemptCounter` | Keeps track of the current retry attempts if a double spend error is detected. | 0
 
 ## Applications and Use Cases
 

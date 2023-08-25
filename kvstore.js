@@ -14,7 +14,9 @@ const defaultConfig = {
   counterparty: undefined,
   receiveFromCounterparty: false,
   sendToCounterparty: false,
-  viewpoint: 'localToSelf'
+  viewpoint: 'localToSelf',
+  doubleSpendMaxAttempts: 5,
+  attemptCounter: 0
 }
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
@@ -207,42 +209,63 @@ const set = async (key, value, config = {}) => {
       counterparty: config.sendToCounterparty ? 'self' : config.counterparty
     })
 
-    action = await SDK.createAction({
-      description: config.actionDescription || `Update the value for ${key}`,
-      inputs: {
-        [kvstoreToken.txid]: {
-          ...kvstoreToken,
-          inputs: typeof kvstoreToken.inputs === 'string'
-            ? JSON.parse(kvstoreToken.inputs)
-            : kvstoreToken.inputs,
-          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
-            ? JSON.parse(kvstoreToken.mapiResponses)
-            : kvstoreToken.mapiResponses,
-          proof: typeof kvstoreToken.proof === 'string'
-            ? JSON.parse(kvstoreToken.proof)
-            : kvstoreToken.proof,
-          outputsToRedeem: [{
-            index: kvstoreToken.vout,
-            unlockingScript,
-            spendingDescription: config.spendingDescription
-          }]
+    // Attempt to update the token
+    try {
+      action = await SDK.createAction({
+        description: config.actionDescription || `Update the value for ${key}`,
+        inputs: {
+          [kvstoreToken.txid]: {
+            ...kvstoreToken,
+            inputs: typeof kvstoreToken.inputs === 'string'
+              ? JSON.parse(kvstoreToken.inputs)
+              : kvstoreToken.inputs,
+            mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+              ? JSON.parse(kvstoreToken.mapiResponses)
+              : kvstoreToken.mapiResponses,
+            proof: typeof kvstoreToken.proof === 'string'
+              ? JSON.parse(kvstoreToken.proof)
+              : kvstoreToken.proof,
+            outputsToRedeem: [{
+              index: kvstoreToken.vout,
+              unlockingScript,
+              spendingDescription: config.spendingDescription
+            }]
+          }
+        },
+        outputs: [{
+          satoshis: config.tokenAmount,
+          script: await pushdrop.create({
+            fields: [
+              await getProtectedKey(key, 'creating', config),
+              value
+            ],
+            protocolID: config.protocolID,
+            keyID: key,
+            counterparty: config.receiveFromCounterparty ? 'self' : config.counterparty,
+            counterpartyCanVerifyMyOwnership: config.viewpoint !== 'localToSelf'
+          }),
+          description: config.outputDescription
+        }]
+      })
+    } catch (error) {
+      // Handle double spend attempts
+      if (error.code === 'ERR_DOUBLE_SPEND') {
+        // Send the missing transactions to Confederacy
+        await Promise.all(Object.values(error.spendingTransactions).map(async envelope => {
+          await submitToOverlay(envelope, config)
+        }))
+        // If we haven't surpassed the limit, try to update the kvstore token again
+        if (config.attemptCounter < config.doubleSpendMaxAttempts) {
+          config.attemptCounter++
+          // Attempt update again
+          return await this.set(key, value, config)
+        } else {
+          throw error
         }
-      },
-      outputs: [{
-        satoshis: config.tokenAmount,
-        script: await pushdrop.create({
-          fields: [
-            await getProtectedKey(key, 'creating', config),
-            value
-          ],
-          protocolID: config.protocolID,
-          keyID: key,
-          counterparty: config.receiveFromCounterparty ? 'self' : config.counterparty,
-          counterpartyCanVerifyMyOwnership: config.viewpoint !== 'localToSelf'
-        }),
-        description: config.outputDescription
-      }]
-    })
+      } else {
+        throw error
+      }
+    }
   } else {
     if (config.receiveFromCountarparty) {
       const e = new Error('There is no token to receive from this counterparty')
@@ -299,28 +322,50 @@ const remove = async (key, config = {}) => {
     keyID: key,
     counterparty: config.counterparty
   })
-  const action = await SDK.createAction({
-    description: `Delete the value for ${key}`,
-    inputs: {
-      [kvstoreToken.txid]: {
-        ...kvstoreToken,
-        inputs: typeof kvstoreToken.inputs === 'string'
-          ? JSON.parse(kvstoreToken.inputs)
-          : kvstoreToken.inputs,
-        mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
-          ? JSON.parse(kvstoreToken.mapiResponses)
-          : kvstoreToken.mapiResponses,
-        proof: typeof kvstoreToken.proof === 'string'
-          ? JSON.parse(kvstoreToken.proof)
-          : kvstoreToken.proof,
-        outputsToRedeem: [{
-          index: kvstoreToken.vout,
-          unlockingScript,
-          spendingDescription: config.spendingDescription
-        }]
+  let action
+  try {
+    action = await SDK.createAction({
+      description: `Delete the value for ${key}`,
+      inputs: {
+        [kvstoreToken.txid]: {
+          ...kvstoreToken,
+          inputs: typeof kvstoreToken.inputs === 'string'
+            ? JSON.parse(kvstoreToken.inputs)
+            : kvstoreToken.inputs,
+          mapiResponses: typeof kvstoreToken.mapiResponses === 'string'
+            ? JSON.parse(kvstoreToken.mapiResponses)
+            : kvstoreToken.mapiResponses,
+          proof: typeof kvstoreToken.proof === 'string'
+            ? JSON.parse(kvstoreToken.proof)
+            : kvstoreToken.proof,
+          outputsToRedeem: [{
+            index: kvstoreToken.vout,
+            unlockingScript,
+            spendingDescription: config.spendingDescription
+          }]
+        }
       }
+    })
+  } catch (error) {
+    // Handle double spend attempts
+    if (error.code === 'ERR_DOUBLE_SPEND') {
+      // Send the missing transactions to Confederacy
+      await Promise.all(Object.values(error.spendingTransactions).map(async envelope => {
+        await submitToOverlay(envelope, config)
+      }))
+      // If we haven't surpassed the limit, try to remove the kvstore token again
+      if (config.attemptCounter < config.doubleSpendMaxAttempts) {
+        config.attemptCounter++
+        // Attempt remove again
+        return await this.remove(key, config)
+      } else {
+        throw error
+      }
+    } else {
+      throw error
     }
-  })
+  }
+
   return await submitToOverlay(action, config)
 }
 
