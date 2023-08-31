@@ -267,7 +267,7 @@ const set = async (key, value, config = {}) => {
       }
     }
   } else {
-    if (config.receiveFromCountarparty) {
+    if (config.receiveFromCounterparty) {
       const e = new Error('There is no token to receive from this counterparty')
       e.code = 'ERR_NO_TOKEN_FROM_COUNTERPARTY'
       throw e
