@@ -258,7 +258,7 @@ const set = async (key, value, config = {}) => {
         if (config.attemptCounter < config.doubleSpendMaxAttempts) {
           config.attemptCounter++
           // Attempt update again
-          return await this.set(key, value, config)
+          return await set(key, value, config)
         } else {
           throw error
         }
@@ -357,7 +357,7 @@ const remove = async (key, config = {}) => {
       if (config.attemptCounter < config.doubleSpendMaxAttempts) {
         config.attemptCounter++
         // Attempt remove again
-        return await this.remove(key, config)
+        return await remove(key, config)
       } else {
         throw error
       }
