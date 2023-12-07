@@ -6,7 +6,9 @@
   "scripts": {
     "test": "jest",
     "doc": "documentation readme --section=API kvstore.js",
-    "lint": "standard --fix ."
+    "lint": "standard --fix .",
+    "tonpm": "npm run tonone && npm i authrite.js --silent",
+    "tonone": "npm r authrite-js --silent"
   },
   "repository": {
     "type": "git",
@@ -29,7 +31,6 @@
   "homepage": "https://github.com/p2ppsr/babbage-kvstore#readme",
   "dependencies": {
     "@babbage/sdk": "^0.4.25",
-    "authrite-js": "^0.3.2",
     "babbage-bsv": "^0.2.1",
     "babbage-historian": "^0.1.2",
     "pushdrop": "^0.1.23",
