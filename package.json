@@ -34,7 +34,7 @@
     "babbage-bsv": "^0.2.1",
     "babbage-historian": "^0.1.2",
     "pushdrop": "^0.1.23",
-    "sendover": "^1.1.8"
+    "sendover": "^1.1.17"
   },
   "devDependencies": {
     "documentation": "^14.0.0",
