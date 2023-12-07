@@ -27,16 +27,16 @@
     "url": "https://github.com/p2ppsr/babbage-kvstore/issues"
   },
   "homepage": "https://github.com/p2ppsr/babbage-kvstore#readme",
-  "dependencies": {
-    "@babbage/sdk": "^0.4.25",
-    "babbage-bsv": "^0.2.1",
-    "babbage-historian": "^0.1.2",
-    "pushdrop": "^0.1.23",
-    "sendover": "^1.1.17"
-  },
   "devDependencies": {
     "documentation": "^14.0.0",
     "jest": "^29.2.0",
     "standard": "^17.0.0"
+  },
+  "dependencies": {
+    "@babbage/sdk": "^0.4.31",
+    "babbage-bsv": "^0.2.2",
+    "babbage-historian": "^0.1.2",
+    "pushdrop": "^0.1.27",
+    "sendover": "^1.1.18"
   }
 }
