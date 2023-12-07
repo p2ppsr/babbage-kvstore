@@ -6,9 +6,7 @@
   "scripts": {
     "test": "jest",
     "doc": "documentation readme --section=API kvstore.js",
-    "lint": "standard --fix .",
-    "tonpm": "npm run tonone && npm i authrite.js --silent",
-    "tonone": "npm r authrite-js --silent"
+    "lint": "standard --fix ."
   },
   "repository": {
     "type": "git",
