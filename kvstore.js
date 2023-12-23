@@ -251,9 +251,11 @@ const set = async (key, value, config = {}) => {
       // Handle double spend attempts
       if (error.code === 'ERR_DOUBLE_SPEND') {
         // Send the missing transactions to Confederacy
-        await Promise.all(Object.values(error.spendingTransactions).map(async envelope => {
-          await submitToOverlay(envelope, config)
-        }))
+        if (error.spendingTransactions) {
+          await Promise.all(Object.values(error.spendingTransactions).map(async envelope => {
+            await submitToOverlay(envelope, config)
+          }))
+        }
         // If we haven't surpassed the limit, try to update the kvstore token again
         if (config.attemptCounter < config.doubleSpendMaxAttempts) {
           config.attemptCounter++
@@ -350,9 +352,11 @@ const remove = async (key, config = {}) => {
     // Handle double spend attempts
     if (error.code === 'ERR_DOUBLE_SPEND') {
       // Send the missing transactions to Confederacy
-      await Promise.all(Object.values(error.spendingTransactions).map(async envelope => {
-        await submitToOverlay(envelope, config)
-      }))
+      if (error.spendingTransactions) {
+        await Promise.all(Object.values(error.spendingTransactions).map(async envelope => {
+          await submitToOverlay(envelope, config)
+        }))
+      }
       // If we haven't surpassed the limit, try to remove the kvstore token again
       if (config.attemptCounter < config.doubleSpendMaxAttempts) {
         config.attemptCounter++
