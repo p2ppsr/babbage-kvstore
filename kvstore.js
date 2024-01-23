@@ -4,6 +4,7 @@ const pushdrop = require('pushdrop')
 const { getPaymentAddress } = require('sendover')
 const bsv = require('babbage-bsv')
 const { Historian } = require('babbage-historian')
+const createHmac = require('./utils/createHmac')
 
 const defaultConfig = {
   confederacyHost: 'https://confederacy.babbage.systems',
@@ -113,6 +114,18 @@ const getProtectedKey = async (key, context = 'searching', config) => {
     ) {
       counterparty = 'self'
     }
+
+    // Check what signing strategy should be used
+    if (config.authriteConfig.clientPrivateKey) {
+      return await createHmac({
+        key: config.authriteConfig.clientPrivateKey,
+        data: key,
+        protocolID: config.protocolID,
+        keyID: key,
+        counterparty
+      })
+    }
+
     return await SDK.createHmac({
       data: key,
       protocolID: config.protocolID,
