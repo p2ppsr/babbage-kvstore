@@ -17,7 +17,10 @@ const defaultConfig = {
   sendToCounterparty: false,
   viewpoint: 'localToSelf',
   doubleSpendMaxAttempts: 5,
-  attemptCounter: 0
+  attemptCounter: 0,
+  getPublicKey: SDK.getPublicKey,
+  createHmac: SDK.createHmac,
+  createAction: SDK.createAction
 }
 
 const computeInvoiceNumber = (protocolID, key) => `${typeof protocolID === 'string' ? '2' : protocolID[0]}-${typeof protocolID === 'string' ? protocolID : protocolID[1]}-${key}`
@@ -40,17 +43,19 @@ const findFromOverlay = async (protectedKey, key, config, history = false) => {
   const [envelope] = await result.json()
   let correctOwnerKey, correctSigningKey
   if (config.viewpoint === 'localToSelf') {
-    correctOwnerKey = await SDK.getPublicKey({
+    correctOwnerKey = await config.getPublicKey({
       protocolID: config.protocolID,
       keyID: key,
       counterparty: config.sendToCounterparty ? 'self' : config.counterparty,
-      forSelf: true
+      forSelf: true,
+      originator: config.originator
     })
-    correctSigningKey = await SDK.getPublicKey({
+    correctSigningKey = await config.getPublicKey({
       protocolID: config.protocolID,
       keyID: key,
       counterparty: config.sendToCounterparty ? 'self' : config.counterparty,
-      forSelf: false
+      forSelf: false,
+      originator: config.originator
     })
   } else {
     correctOwnerKey = getPaymentAddress({
@@ -116,21 +121,22 @@ const getProtectedKey = async (key, context = 'searching', config) => {
     }
 
     // Check what signing strategy should be used
-    if (config.authriteConfig.clientPrivateKey) {
-      return await createHmac({
-        key: config.authriteConfig.clientPrivateKey,
-        data: key,
-        protocolID: config.protocolID,
-        keyID: key,
-        counterparty
-      })
-    }
+    // if (config.authriteConfig.clientPrivateKey) {
+    //   return await createHmac({
+    //     key: config.authriteConfig.clientPrivateKey,
+    //     data: key,
+    //     protocolID: config.protocolID,
+    //     keyID: key,
+    //     counterparty
+    //   })
+    // }
 
-    return await SDK.createHmac({
+    return await config.createHmac({
       data: key,
       protocolID: config.protocolID,
       keyID: key,
-      counterparty
+      counterparty,
+      originator: config.originator // ?
     })
   } else {
     const invoiceNumber = computeInvoiceNumber(config.protocolID, key)
@@ -224,7 +230,7 @@ const set = async (key, value, config = {}) => {
 
     // Attempt to update the token
     try {
-      action = await SDK.createAction({
+      action = await config.createAction({
         description: config.actionDescription || `Update the value for ${key}`,
         inputs: {
           [kvstoreToken.txid]: {
@@ -258,7 +264,8 @@ const set = async (key, value, config = {}) => {
             counterpartyCanVerifyMyOwnership: config.viewpoint !== 'localToSelf'
           }),
           description: config.outputDescription
-        }]
+        }],
+        originator: config.originator
       })
     } catch (error) {
       // Handle double spend attempts
@@ -287,7 +294,7 @@ const set = async (key, value, config = {}) => {
       e.code = 'ERR_NO_TOKEN_FROM_COUNTERPARTY'
       throw e
     }
-    action = await SDK.createAction({
+    action = await config.createAction({
       description: config.actionDescription || `Set a value for ${key}`,
       outputs: [{
         satoshis: config.tokenAmount,
@@ -302,7 +309,8 @@ const set = async (key, value, config = {}) => {
           ownedByCreator: config.viewpoint !== 'localToSelf'
         }),
         description: config.outputDescription
-      }]
+      }],
+      originator: config.originator
     })
   }
   return await submitToOverlay(action, config)
@@ -339,7 +347,7 @@ const remove = async (key, config = {}) => {
   })
   let action
   try {
-    action = await SDK.createAction({
+    action = await config.createAction({
       description: `Delete the value for ${key}`,
       inputs: {
         [kvstoreToken.txid]: {
@@ -359,7 +367,8 @@ const remove = async (key, config = {}) => {
             spendingDescription: config.spendingDescription
           }]
         }
-      }
+      },
+      originator: config.originator
     })
   } catch (error) {
     // Handle double spend attempts
@@ -386,4 +395,4 @@ const remove = async (key, config = {}) => {
   return await submitToOverlay(action, config)
 }
 
-module.exports = { get, getWithHistory, set, remove }
+module.exports = { get, getWithHistory, set, remove, defaultConfig }
