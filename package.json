@@ -34,10 +34,10 @@
   },
   "dependencies": {
     "@babbage/sdk": "^0.4.47",
-    "authrite-js": "^0.4.6",
+    "authrite-js": "^0.4.7",
     "babbage-bsv": "^0.2.4",
     "babbage-historian": "^0.1.2",
     "pushdrop": "^0.1.40",
-    "sendover": "^1.3.6"
+    "sendover": "^1.3.7"
   }
 }
