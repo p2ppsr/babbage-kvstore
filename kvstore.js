@@ -1,5 +1,5 @@
 const { Authrite } = require('authrite-js')
-const SDK = require('@babbage/sdk')
+const SDK = require('@babbage/sdk-ts')
 const pushdrop = require('pushdrop')
 const { getPaymentAddress } = require('sendover')
 const bsv = require('babbage-bsv')
