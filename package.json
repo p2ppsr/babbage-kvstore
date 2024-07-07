@@ -33,11 +33,11 @@
     "standard": "^17.0.0"
   },
   "dependencies": {
-    "@babbage/sdk-ts": "^0.2.39",
-    "authrite-js": "^0.4.31",
+    "@babbage/sdk-ts": "^0.2.42",
+    "authrite-js": "^0.4.32",
     "babbage-bsv": "^0.2.5",
     "babbage-historian": "^0.1.2",
-    "pushdrop": "^0.1.58",
-    "sendover": "^1.3.24"
+    "pushdrop": "^0.1.59",
+    "sendover": "^1.3.25"
   }
 }
