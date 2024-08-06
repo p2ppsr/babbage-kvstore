@@ -1,6 +1,6 @@
 {
   "name": "babbage-kvstore",
-  "version": "1.2.33",
+  "version": "1.2.34",
   "description": "Set and get keys and Values©",
   "main": "kvstore.js",
   "scripts": {
