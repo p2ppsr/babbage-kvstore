@@ -1,8 +1,5 @@
-# Babbage-KVStore
 
-A flexible and decentralized Key-Value storage and retrieval system, designed and engineered around the feature-rich and versatile Bitcoin SV (BSV).
-
-[![npm version](https://badge.fury.io/js/babbage-kvstore.svg)](https://badge.fury.io/js/babbage-kvstore)
+A flexible and decentralized Key-Value storage and retrieval system for personal and shared contexts, designed and engineered around the feature-rich and versatile Bitcoin SV (BSV).
 
 ## Table Of Contents
 
@@ -19,7 +16,15 @@ A flexible and decentralized Key-Value storage and retrieval system, designed an
 
 ## Introduction
 
-Babbage KVStore provides robust key-value storage functionality for your applications that leverages the power of Bitcoin SV's blockchain technology. By treating Bitcoin transactions (specifically UTXOs or Unspent Transaction Outputs) as your value store, you can create highly-distributed and verifiably-secure data storage for your application.
+Babbage KVStore provides robust key-value storage functionality for your applications that leverages the power of Bitcoin SV's blockchain technology. By treating Bitcoin transactions (specifically UTXOs or Unspent Transaction Outputs) as your value store, you can create highly-distributed and verifiably-secure data storage for your application. KVStore comes in two flavors: Personal and Shared, .
+#### Personal
+Key-value pairs are stored 'locally,' meaning in an individual user's BSV Wallet. The data is local to the person, but can be accessed by any device authenticated into that user's wallet. Related data can be grouped together into a namespace called a 'basket.'
+
+#### Shared
+Key-value pairs are tracked by an Overlay Service, allowing multiple authorized users to create, read, update, and delete the same data, still in a decentralized system. Changes will propagate to all data hosts and the history of a key's value can be retrieved. By default, there is only one namespace for all data using the Shared KVStore system: a topic called 'kvstore.' Custom topics can be created, but this requires the creation and deployment of advanced infrastructure.
+
+#### Methods
+Create, Read, Update, and Delete (CRUD) functionality is provided through a similar interface for both flavors of KVStore with three functions: get (read), set (create and update), and remove (delete).
 
 ## Installation
 
@@ -31,18 +36,62 @@ npm install babbage-kvstore
 
 ## Usage
 
-### Setting and Getting values
+### Step 1: Set-Up
 
-You can easily set up and utilize a key-value (KV) structure with Babbage. The `set` method takes in a key and a value, which are both strings. The `get` method retrieves the value associated with a key. Here is an example:
+First, choose a flavor: Personal or Shared.
+
+Each flavor has configuration settings to change. Each parameter is optional and defers to a default value if no alternative is provided. Any parameters that are given will become the new default for this KVStore object instance. This is useful if, for example, if you want to create one instance responsible for managing application appearance settings. The basket name or overlay URL would most likely not change between calls, and would be repetitive to add each time. Each get, set, and delete call can deviate from the default configuration with optional parameters.
+
+#### Personal
 
 ```js
-const { get, set } = require('babbage-kvstore');
+import { KVStorePersonal } from 'babbage-kvstore'
+
+const personalStore = new KVStorePersonal({
+	basket?: string = 'kvstore-default',
+	tokenAmount?: number = 1,
+})
+```
+
+#### Shared
+
+```js
+import { KVStoreShared } from 'babbage-kvstore'
+
+const sharedStore = new KVStoreShared({
+	networkPreset?: 'mainnet' | 'testnet' | 'local' = 'mainnet',
+	topics?: string[] = ['kvstore'],
+	tokenAmount?: number = 1,
+	counterparty?: string = 'self',
+	doubleSpendMaxAttempts?: number = 5
+})
+```
+
+### Step 2: Setting and Getting values
+
+The `set` method takes in a key and a value, which are both strings. If the key-value pair doesn't exist in the storage system yet, it will be created. If it does exist, the storage will update its value with the provided one. The `get` method retrieves the value associated with a key, if it exists. Optionally, a default value can be provided so that an expected value is returned if the key-value pari is not found. Here is an example:
+
+```js
+import { KVStorePersonal } from 'babbage-kvstore'
+
+// Step 1: Create an instance
+const personalStore = new KVStorePersonal()
 
 // Set a value
-set('Hello', 'World');
-
+await personalStore.set('Hello', 'World')
 // Retrieve a value
-console.log(get('Hello')); // Outputs: 'World'
+console.log(await personalStore.get('Hello')) // Outputs: 'World'
+
+// Update the value
+await personalStore.set('Hello', 'Mom')
+// See the update
+console.log(await personalStore.get('Hello')) // Outputs: 'Mom'
+
+// Check for a value that hasn't been set
+console.log(await personalStore.get('foo')) // Outputs: An empty string ''
+// Check for a value that hasn't been set, giving a default
+console.log(await personalStore.get('foo', 'bar')) // Outputs: 'bar'
+
 ```
 
 ### Removing a Value
@@ -50,43 +99,39 @@ console.log(get('Hello')); // Outputs: 'World'
 The `remove` method is used to delete a value in your KV store. All you need is the key:
 
 ```js
-const { remove } = require('babbage-kvstore');
+import { KVStoreShared } from 'babbage-kvstore'
 
-// Remove a value
-remove('Hello');
+const sharedStore = new KVStoreShared()
+
+// Set a value
+await sharedStore.set('Hello', 'World')
+
+// Remove the value
+await sharedStore.remove('Hello')
+
+// Get the deleted value
+console.log(await sharedStore.get('Hello')) // Outputs: An empty string ''
 ```
 
 ### Retrieving Previous Values
 
-`getWithHistory` lets you view previous versions of a value, allowing for an auditable log. This can be very powerful in several auditing and data tracking scenarios:
+`getWithHistory` lets you view previous versions of a value, allowing for an auditable log. This can be very powerful in several auditing and data tracking scenarios. This feature is only available in KVStoreShared. Calling it on a KVStorePersonal instance will throw an error.
 
 ```js
-const { getWithHistory } = require('babbage-kvstore');
+import { KVStoreShared } from 'babbage-kvstore'
+
+const sharedStore = new KVStoreShared()
+
+// Set a value
+sharedStore.set('Hello', 'World')
+sharedStore.set('Hello', 'Mom')
 
 // Retrieve a value with history
-console.log(getWithHistory('Hello')); // Outputs: entire history of 'Hello'
+console.log(await sharedStorage.getWithHistory('Hello'))
+/* Outputs: entire history of 'Hello'
+   What this looks like?
+*/
 ```
-
-## Configuration
-
-None of these values are required, but you can use them to customize and greatly extend the behavior of KVStore.
-
-Name                  | Description               | Default Value
-----------------------|---------------------------|---------------------
-`actionDescription`   | Description for the Action that sets a value | `Set a value for (key)`
-`outputDescription`   | Description for the transaction output (line item) that represents a new value | none
-`spendingDescription` | Description for the consumption of a previous value | none
-`confederacyHost`     | URL to the overlay network node that tracks the UTXOs you want to interact with | `'https://confederacy.babbage.systems'`
-`topics`              | Overlay network node topics where UTXOs are stored and retrieved | `['kvstore']`
-`protocolID`          | Sets the universe in wihch your keys and values are stored. Items in one universe can only be accessed in the same universe. | `[0, 'kvstore']`
-`tokenAmount`         | Sets the number of satoshis in each KVStore UTXO | `1000`
-`authriteConfig`      | Parameters used to construct the Authrite client used to communicate with the overlay network node | `undefined`
-`counterparty`        | Allows the sharing and transfer of tokens between users (advanced) | `undefined`
-`receiveFromCounterparty` | Move the token sent from the counterparty to self | `false`
-`sendToCounterparty`      | Move the token owned by self to the counterparty | `false`
-`viewpoint`               | Allows access to data repositories outside of one's own control. The viewpoint must be the identity public key of the repository owner. By default, only data from your own local viewpoint is accessible. | `localToSelf`
-`doubleSpendMaxAttempts` | The max number of times it should reattempt an action if a double spend error is detected. | 5
-`attemptCounter` | Keeps track of the current retry attempts if a double spend error is detected. | 0
 
 ## Applications and Use Cases
 
@@ -100,6 +145,31 @@ Due to its distributed, secure, and robust nature, Babbage KVStore can be used i
 *   Auditing systems: With the use of the `getWithHistory` function, you can implement auditable logging and tracking systems.
 *   Secure system settings: Store secure system environment settings.
 *   Gaming: Keep track of game states and history.
+
+## Config
+
+Config objects, either Personal or Shared, are used by the constructor of a KVStore instance to set the defaults for that instance. Config objects are used again in get(), set(), remove(), and getWithHistory() calls to override the default parameters set for for the called upon KVStore instance.
+
+### KVStorePersonalConfig
+
+```js
+interface KVStorePersonalConfig {
+	basket?: string = 'kvstore-default',
+	tokenAmount?: number = 1,
+}
+```
+
+### KVStoreSharedConfig
+
+```js
+interface KVStoreSharedConfig {
+	networkPreset?: 'mainnet' | 'testnet' | 'local' = 'mainnet',
+	topics?: string[] = ['kvstore'],
+	tokenAmount?: number = 1,
+	counterparty?: string = 'self',
+	doubleSpendMaxAttempts?: number = 5
+}
+```
 
 ## API
 
@@ -118,39 +188,39 @@ Due to its distributed, secure, and robust nature, Babbage KVStore can be used i
 
 ### get
 
-Gets a value from the store.
+Gets a value from the store corresponding to the `key`. If the value can't be found, `defaultValue` is returned, if provided, or `undefined`
 
 #### Parameters
 
-*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to get
-*   `defaultValue` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value returned when no token is found (optional, default `undefined`)
-*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
+*   `key: string` The key for the value to get
+*   `defaultValue?: string`  The value returned when the given key cannot be found (optional, default `undefined`)
+*   `config: KVStorePersonalConfig | KVStoreSharedConfig`  The config object (see the config section) (optional, default `{}`)
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** The value from the store
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[string](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)>** The value from the store
 
 ### getWithHistory
 
-Gets a value from the store with history of token
+Gets a value from the store with its history. Only available for KVStoreShared.
 
 #### Parameters
 
-*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to get
-*   `defaultValue` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value returned when no token is found (optional, default `undefined`)
-*   `config` **[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
+*   `key: string` The key for the value to get
+*   `defaultValue: string` The value returned when no token is found (optional, default `undefined`)
+*   `config: KVStoreSharedConfig` The config object (see the config section) (optional, default `{}`)
 
 Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)<[object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)>** The value from the store and history of the token
 
 ### set
 
-Sets a new value in the store, overwriting any existing value.
+Sets a new `value` in the store, overwriting any existing value corresponding to that `key`.
 
 #### Parameters
 
-*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to set
-*   `value` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The value to store
-*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
+*   `key: string` The key for the value to set
+*   `value: string` The value to store
+*   `config: KVStorePersonalConfig | KVStoreSharedConfig` The config object (see the config section) (optional, default `{}`)
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** Promise that resolves when the value has been stored
+Returns Promise that resolves to true when the value has been stored, false if it fails, with an exception thrown.
 
 ### remove
 
@@ -158,10 +228,26 @@ Deletes a value from the store.
 
 #### Parameters
 
-*   `key` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The key for the value to remove
-*   `config` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** The config object (see the config section) (optional, default `{}`)
+*   `key: string` The key for the value to remove
+*   `config: KVStorePersonalConfig | KVStoreSharedConfig` The config object (see the config section) (optional, default `{}`)
 
-Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** Promise that resolves when the value has been deleted
+Returns Promise that resolves to true when the value has been deleted or false if it couldn't be found
+
+## Project Roadmap
+
+#### Current version: 1.2.36
+
+#### Goals for version 1.3
+
+- [ ] Create an empty new project
+- [ ] Implement the local (KVStorePersonal) class
+#### Goals for Version 2.0
+
+- [ ] Bring in version 1.2.36 code as shared (KVStoreShared) class
+- [ ] Update it to typescript
+- [ ] Update it to use @bsv/sdk
+- [ ] Update the topic manager for @bsv/sdk
+- [ ] Update the lookup service for @bsv/sdk
 
 ## License
 
