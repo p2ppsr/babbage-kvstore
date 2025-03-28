@@ -1,4 +1,5 @@
 import { LockingScript, PushDrop, Utils, WalletClient } from "@bsv/sdk";
+import updateToken from "./UpdateToken";
 
 export interface KVStorePersonalConfig {
   basket?: string
@@ -25,10 +26,7 @@ export default class KVStorePersonal {
     this.config = { ...defaultConfig, ...config }
   }
 
-  async get(
-    key: string,
-    defaultValue: string | undefined = undefined,
-  ): Promise<string | undefined> {
+  async get(key: string, defaultValue: string | undefined = undefined): Promise<string | undefined> {
 
     if (!this.config.basket) {
       throw new Error('No basket to search. An invalid name given in the constructor overwrote the default basket name.')
@@ -52,5 +50,30 @@ export default class KVStorePersonal {
     return Utils.toUTF8(fields[0])
   }
 
-  
+  async set(key: string, value: string): Promise<boolean> {
+
+    const pushdrop = new PushDrop(this.wallet)
+
+    // Build the new locking script with the updated value.
+    const lockingScript = await pushdrop.lock(
+      [Utils.toArray(value, 'utf8')],
+      [1, 'kvstore'], // TODO check if this is right
+      key,  // TODO check this too
+      'self'
+    )
+
+    // Consume any existing token and create a new one with the new locking script.
+    return await updateToken(this.wallet, this.config.basket!, key, this.config.tokenAmount!, [1, 'kvstore'], lockingScript)
+
+  }
+
+  async remove(key: string): Promise<boolean> {
+
+    // Search for the given key. If it exists:
+    // Consume it and return true.
+    // If it doesn't:
+    // Return false
+    return await updateToken(this.wallet, this.config.basket!, key, this.config.tokenAmount!, [1, 'kvstore'])
+
+  }
 }
