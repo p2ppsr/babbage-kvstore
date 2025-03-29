@@ -1,1 +1,1 @@
-export KVStorePersonal from './KVStorePersonal'
+export { default as KVStorePersonal } from './LocalKVStore'
