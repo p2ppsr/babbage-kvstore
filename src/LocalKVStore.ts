@@ -1,10 +1,38 @@
 import { LockingScript, PushDrop, Utils, WalletInterface, WalletClient, OutpointString, CreateActionInput, SignActionSpend, Transaction } from "@bsv/sdk";
 
+/**
+ * Implements a key-value storage system backed by transaction outputs managed by a wallet.
+ * Each key-value pair is represented by a PushDrop token output in a specific context (basket).
+ * Allows setting, getting, and removing key-value pairs, with optional encryption.
+ */
 export default class localKVStore {
+  /**
+   * The wallet interface used to manage outputs and perform cryptographic operations.
+   * @private
+   * @readonly
+   */
   private readonly wallet: WalletInterface
+  /**
+   * The context (basket name) used to namespace the key-value pairs within the wallet.
+   * @private
+   * @readonly
+   */
   private readonly context: string
+  /**
+   * Flag indicating whether values should be encrypted before storing.
+   * @private
+   * @readonly
+   */
   private readonly encrypt: boolean
 
+  /**
+   * Creates an instance of the localKVStore.
+   *
+   * @param {WalletInterface} [wallet=new WalletClient()] - The wallet interface to use. Defaults to a new WalletClient instance.
+   * @param {string} [context='kvstore-default'] - The context (basket) for namespacing keys. Defaults to 'kvstore-default'.
+   * @param {boolean} [encrypt=true] - Whether to encrypt values. Defaults to true.
+   * @throws {Error} If the context is missing or empty.
+   */
   constructor(
     wallet: WalletInterface = new WalletClient(),
     context = 'kvstore-default',
@@ -18,6 +46,16 @@ export default class localKVStore {
     this.encrypt = encrypt
   }
 
+  /**
+   * Retrieves the value associated with a given key.
+   *
+   * @param {string} key - The key to retrieve the value for.
+   * @param {string | undefined} [defaultValue=undefined] - The value to return if the key is not found.
+   * @returns {Promise<string | undefined>} A promise that resolves to the value as a string,
+   *   the defaultValue if the key is not found, or undefined if no defaultValue is provided.
+   * @throws {Error} If multiple outputs are found for the key (ambiguous state).
+   * @throws {Error} If the found output's locking script cannot be decoded or represents an invalid token format.
+   */
   async get(key: string, defaultValue: string | undefined = undefined): Promise<string | undefined> {
     const results = await this.wallet.listOutputs({
       basket: this.context,
@@ -51,6 +89,19 @@ export default class localKVStore {
     }
   }
 
+  /**
+   * Sets or updates the value associated with a given key.
+   * If the key already exists (one or more outputs found), it spends the existing output(s)
+   * and creates a new one with the updated value. If multiple outputs exist for the key,
+   * they are collapsed into a single new output.
+   * If the key does not exist, it creates a new output.
+   * Handles encryption if enabled.
+   * If signing the update/collapse transaction fails, it relinquishes the original outputs and starts over with a new chain.
+   *
+   * @param {string} key - The key to set or update.
+   * @param {string} value - The value to associate with the key.
+   * @returns {Promise<OutpointString>} A promise that resolves to the outpoint string (txid.vout) of the new or updated token output.
+   */
   async set(key: string, value: string): Promise<OutpointString> {
     let valueAsArray = Utils.toArray(value, 'utf8')
     if (this.encrypt) {
@@ -116,6 +167,7 @@ export default class localKVStore {
         })
         return `${txid}.0`
       } catch (_) {
+        // Signing failed, relinquish original outputs
         for (let i = 0; i < results.outputs.length; i++) {
           await this.wallet.relinquishOutput({
             output: results.outputs[i].outpoint,
@@ -139,6 +191,16 @@ export default class localKVStore {
     return `${txid}.0`
   }
 
+  /**
+   * Removes the key-value pair associated with the given key.
+   * It finds the existing output(s) for the key and spends them without creating a new output.
+   * If multiple outputs exist, they are all spent in the same transaction.
+   * If the key does not exist, it does nothing.
+   * If signing the removal transaction fails, it relinquishes the original outputs instead of spending.
+   *
+   * @param {string} key - The key to remove.
+   * @returns {Promise<string | void>} A promise that resolves to the txid of the removal transaction if successful.
+   */
   async remove(key: string): Promise<OutpointString | void> {
     const results = await this.wallet.listOutputs({
       basket: this.context,
@@ -146,7 +208,7 @@ export default class localKVStore {
       include: 'entire transactions'
     })
     if (results.totalOutputs === 0) {
-      return
+      return // Key not found, do nothing
     }
     const pushdrop = new PushDrop(this.wallet)
     try {
@@ -163,8 +225,7 @@ export default class localKVStore {
         inputBEEF: results.BEEF,
         inputs,
         options: {
-          acceptDelayedBroadcast: false,
-          randomizeOutputs: false
+          acceptDelayedBroadcast: false
         }
       })
       const tx = Transaction.fromAtomicBEEF(signableTransaction.tx)
@@ -184,7 +245,7 @@ export default class localKVStore {
         reference: signableTransaction.reference,
         spends
       })
-      return `${txid}.0`
+      return txid
     } catch (_) {
       for (let i = 0; i < results.outputs.length; i++) {
         await this.wallet.relinquishOutput({
