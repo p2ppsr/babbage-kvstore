@@ -642,8 +642,7 @@ describe('localKVStore', () => {
                 // IMPORTANT: No 'outputs' key should be present for removal action
                 outputs: undefined, // Or check that the key is not present
                 options: {
-                    acceptDelayedBroadcast: false,
-                    randomizeOutputs: false
+                    acceptDelayedBroadcast: false
                 }
             });
             // Check that outputs key is absent
