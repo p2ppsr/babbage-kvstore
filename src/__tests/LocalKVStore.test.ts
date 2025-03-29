@@ -626,10 +626,7 @@ describe('localKVStore', () => {
 
             const result = await kvStore.remove(testKey);
 
-            // The original code returns `${txid}.0`, which might be unintentional for removals.
-            // Adjust expectation based on actual SUT behavior or modify SUT if needed.
-            // Assuming current behavior:
-            expect(result).toBe(`${removalTxId}.0`);
+            expect(result).toBe(removalTxId);
             expect(mockWallet.listOutputs).toHaveBeenCalledWith({ basket: testContext, tags: [testKey], include: 'entire transactions' });
 
             // Verify createAction for REMOVE (no outputs in the action)
