@@ -5,7 +5,7 @@ import { LockingScript, PushDrop, Utils, WalletInterface, WalletClient, Outpoint
  * Each key-value pair is represented by a PushDrop token output in a specific context (basket).
  * Allows setting, getting, and removing key-value pairs, with optional encryption.
  */
-export default class localKVStore {
+export default class LocalKVStore {
   /**
    * The wallet interface used to manage outputs and perform cryptographic operations.
    * @private

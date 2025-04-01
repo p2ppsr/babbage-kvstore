@@ -2,6 +2,7 @@
   "name": "babbage-kvstore",
   "version": "2.0.0",
   "description": "Blockchain-based key-value storage for local and global use",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
